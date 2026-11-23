@@ -1,0 +1,18 @@
+services:
+  monstack:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    container_name: monstack
+    restart: unless-stopped
+    ports:
+      - "8443:8443"   # HTTPS Web + API
+      - "9443:9443"   # gRPC Agent
+    volumes:
+      - monstack_data:/var/lib/monstack
+      - ./monstack.yaml:/etc/monstack/monstack.yaml:ro
+    environment:
+      - TZ=Asia/Jakarta
+
+volumes:
+  monstack_data:

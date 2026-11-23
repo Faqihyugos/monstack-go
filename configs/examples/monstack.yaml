@@ -1,0 +1,124 @@
+# MonStack-Go Server Configuration
+# Full reference: docs/configuration.md
+
+server:
+  listen: ":8443"
+  mode: https                      # http | https | auto
+  read_timeout: 30s
+  write_timeout: 30s
+  tls:
+    mode: self-signed              # acme | manual | self-signed
+    # acme:
+    #   email: "admin@example.com"
+    #   domains: ["monitor.example.com"]
+    #   cache_dir: "/var/lib/monstack/certs"
+    # manual:
+    #   cert_file: "/etc/ssl/cert.pem"
+    #   key_file: "/etc/ssl/key.pem"
+
+auth:
+  enabled: true
+  admin_user: "admin"
+  admin_password: "changeme"       # Will be bcrypt hashed on first run
+  jwt:
+    secret: ""                     # Auto-generated if empty
+    expiry: 24h
+
+storage:
+  tsdb:
+    path: "/var/lib/monstack/data"
+    retention: 30d
+    max_disk: 50GB
+  metadata:
+    path: "/var/lib/monstack/meta.db"
+  cache:
+    enabled: true
+    max_memory: 256MB
+
+grpc:
+  listen: ":9443"
+  tls: true
+  max_recv_msg_size: 16MB
+
+probes:
+  defaults:
+    interval: 30s
+    timeout: 10s
+    retries: 2
+
+  targets:
+    - name: "example-http"
+      type: http
+      target: "https://example.com"
+      interval: 30s
+      timeout: 10s
+      http:
+        method: GET
+        expected_status: [200]
+      labels:
+        environment: example
+
+    - name: "gateway-ping"
+      type: icmp
+      target: "8.8.8.8"
+      interval: 15s
+      icmp:
+        count: 3
+        protocol: ip4
+      labels:
+        name: "Google DNS"
+
+alerting:
+  evaluation_interval: 10s
+
+  rules:
+    - name: "Target Down"
+      expr: "probe_success == 0"
+      for: 2m
+      severity: critical
+      annotations:
+        summary: "{{ $target }} is unreachable"
+
+    - name: "High Latency"
+      expr: "probe_response_time > 2"
+      for: 5m
+      severity: warning
+      annotations:
+        summary: "{{ $target }} response time is {{ $value }}s"
+
+    - name: "SSL Expiring"
+      expr: "probe_ssl_days_remaining < 14"
+      for: 1h
+      severity: warning
+      annotations:
+        summary: "SSL for {{ $target }} expires in {{ $value }} days"
+
+  channels:
+    - name: "default-webhook"
+      type: webhook
+      config:
+        url: "http://localhost:9999/alerts"
+    # - name: "ops-telegram"
+    #   type: telegram
+    #   config:
+    #     bot_token: ""
+    #     chat_id: ""
+
+  routing:
+    default_channel: "default-webhook"
+
+discovery: []
+  # - type: dns_srv
+  #   config:
+  #     domain: "_http._tcp.services.internal"
+  #     refresh_interval: 60s
+  # - type: cidr_scan
+  #   config:
+  #     networks: ["192.168.1.0/24"]
+  #     ports: [80, 443]
+  #     interval: 30m
+
+logging:
+  level: info
+  format: json
+  output: stdout

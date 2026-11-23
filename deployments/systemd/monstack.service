@@ -1,0 +1,33 @@
+[Unit]
+Description=MonStack-Go Monitoring Server
+Documentation=https://github.com/yourusername/monstack-go
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=monstack
+Group=monstack
+ExecStart=/usr/local/bin/monstack server --config /etc/monstack/monstack.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/monstack /var/log/monstack /etc/monstack
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=monstack
+
+[Install]
+WantedBy=multi-user.target

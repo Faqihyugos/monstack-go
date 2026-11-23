@@ -1,0 +1,54 @@
+# MonStack-Go Agent Configuration
+
+server:
+  address: "monitor.example.com:9443"
+  token: ""                        # Agent authentication token
+  tls:
+    enabled: true
+    skip_verify: false             # Set true for self-signed certs
+    ca_file: ""                    # Custom CA certificate
+
+agent:
+  hostname: ""                     # Auto-detected if empty
+  labels:
+    environment: production
+    role: webserver
+
+collectors:
+  cpu:
+    enabled: true
+    interval: 10s
+  memory:
+    enabled: true
+    interval: 10s
+  disk:
+    enabled: true
+    interval: 30s
+    mount_points: ["/", "/data"]
+  network:
+    enabled: true
+    interval: 10s
+    interfaces: []                 # Empty = all interfaces
+  load:
+    enabled: true
+    interval: 10s
+  process:
+    enabled: false
+    interval: 30s
+    names: ["nginx", "postgres"]
+  zfs:
+    enabled: false
+    interval: 60s
+  bird:
+    enabled: false
+    interval: 60s
+    socket: "/var/run/bird/bird.ctl"
+
+heartbeat:
+  interval: 15s
+  timeout: 30s
+
+logging:
+  level: info
+  format: json
+  output: stdout
