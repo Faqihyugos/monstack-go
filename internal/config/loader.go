@@ -76,7 +76,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.tls.mode", "self-signed")
 
 	// Auth defaults
-	v.SetDefault("auth.enabled", true)
+	v.SetDefault("auth.enabled", false)
 	v.SetDefault("auth.admin_user", "admin")
 	v.SetDefault("auth.admin_password", "changeme")
 	v.SetDefault("auth.jwt.expiry", "24h")

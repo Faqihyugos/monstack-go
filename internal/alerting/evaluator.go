@@ -131,13 +131,13 @@ func NewEvaluator(
 		m = metrics.Default()
 	}
 	return &Evaluator{
-		meta:     meta,
-		tsdb:     tsdb,
-		prober:   engine,
-		router:   router,
-		silencer: silencer,
-		metrics:  m,
-		logger:   logger,
+		meta:      meta,
+		tsdb:      tsdb,
+		prober:    engine,
+		router:    router,
+		silencer:  silencer,
+		metrics:   m,
+		logger:    logger,
 		interval:  interval,
 		states:    make(map[string]*alertState),
 		triggerCh: make(chan struct{}, 1),

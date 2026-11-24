@@ -906,8 +906,8 @@ func formatYAMLString(s string) string {
 	if s == "true" || s == "false" || s == "null" || s == "yes" || s == "no" {
 		return fmt.Sprintf("%q", s)
 	}
-	// Check if string contains special chars
-	specialChars := ":#[]{},&*!|>'\"%@`~"
+	// Check if string contains special chars or control whitespace (e.g. \r, \n, \t)
+	specialChars := ":#[]{},&*!|>'\"%@`~\r\n\t"
 	if strings.ContainsAny(s, specialChars) || strings.HasPrefix(s, " ") || strings.HasSuffix(s, " ") {
 		return fmt.Sprintf("%q", s)
 	}

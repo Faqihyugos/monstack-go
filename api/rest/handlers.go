@@ -237,6 +237,9 @@ func (h *Handlers) CreateTargetHandler(w http.ResponseWriter, r *http.Request) {
 	if target.TimeoutMs <= 0 {
 		target.TimeoutMs = 10000
 	}
+	if target.TimeoutMs > target.IntervalMs {
+		target.TimeoutMs = target.IntervalMs
+	}
 	if target.Config == nil {
 		target.Config = make(map[string]any)
 	}
