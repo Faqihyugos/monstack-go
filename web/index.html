@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MonStack — Infrastructure Monitoring</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-red: #ef4444;
+            --border-color: #475569;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--text-primary);
+        }
+
+        .brand .badge {
+            background-color: #0284c7;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-pill.up {
+            background-color: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-pill.down {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .stat-card .label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table-container {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 32px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        th {
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-secondary);
+            padding: 12px 16px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            background-color: var(--bg-card);
+            color: var(--accent-blue);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.healthy {
+            background-color: rgba(34, 197, 94, 0.2);
+            color: var(--accent-green);
+        }
+
+        .status-badge.unhealthy {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+        }
+
+        .empty-state {
+            padding: 32px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <h1>MonStack</h1>
+                <span class="badge">Go</span>
+            </div>
+            <div class="header-status">
+                <span id="system-status" class="status-pill up">
+                    <span class="status-dot"></span>
+                    <span id="system-status-text">System Up</span>
+                </span>
+                <span id="uptime-display" style="color: var(--text-secondary); font-size: 13px;">Uptime: ...</span>
+            </div>
+        </header>
+
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Targets</div>
+                <div id="stat-total-targets" class="value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Active Alerts</div>
+                <div id="stat-active-alerts" class="value" style="color: var(--accent-green);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Subsystems Healthy</div>
+                <div id="stat-subsystems" class="value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Server Version</div>
+                <div id="stat-version" class="value" style="font-size: 20px;">v1.0.0</div>
+            </div>
+        </section>
+
+        <div class="section-header">
+            <h2 class="section-title">Monitored Targets</h2>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Target ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Endpoint Address</th>
+                        <th>Interval</th>
+                        <th>Timeout</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="targets-table-body">
+                    <tr>
+                        <td colspan="7" class="empty-state">Loading monitored targets...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-header">
+            <h2 class="section-title">Active Alert Events</h2>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rule</th>
+                        <th>Target</th>
+                        <th>Severity</th>
+                        <th>Message</th>
+                        <th>Fired At</th>
+                    </tr>
+                </thead>
+                <tbody id="alerts-table-body">
+                    <tr>
+                        <td colspan="5" class="empty-state">No active alert events. All systems operating normally.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            <div>MonStack-Go Single-Binary Infrastructure Monitoring Platform</div>
+            <div>
+                <a href="/metrics" target="_blank">Prometheus Metrics</a> &bull;
+                <a href="/api/v1/health" target="_blank">Health Check</a> &bull;
+                <a href="/api/v1/config" target="_blank">Configuration</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        async function fetchDashboardData() {
+            try {
+                // Fetch Health
+                const healthRes = await fetch('/api/v1/health');
+                if (healthRes.ok) {
+                    const health = await healthRes.json();
+                    document.getElementById('system-status-text').textContent = health.status === 'up' ? 'System Up' : 'System ' + health.status;
+                    document.getElementById('uptime-display').textContent = 'Uptime: ' + (health.uptime || health.uptime_seconds + 's');
+                    document.getElementById('stat-version').textContent = health.version || 'v1.0.0';
+                    const subCount = health.subsystems ? Object.keys(health.subsystems).length : 0;
+                    document.getElementById('stat-subsystems').textContent = subCount;
+                }
+
+                // Fetch Targets
+                const targetsRes = await fetch('/api/v1/targets');
+                if (targetsRes.ok) {
+                    const data = await targetsRes.json();
+                    const targets = data.targets || [];
+                    document.getElementById('stat-total-targets').textContent = targets.length;
+                    renderTargetsTable(targets);
+                }
+
+                // Fetch Alerts
+                const alertsRes = await fetch('/api/v1/alerts');
+                if (alertsRes.ok) {
+                    const data = await alertsRes.json();
+                    const alerts = data.alerts || [];
+                    const activeCountEl = document.getElementById('stat-active-alerts');
+                    activeCountEl.textContent = alerts.length;
+                    if (alerts.length > 0) {
+                        activeCountEl.style.color = 'var(--accent-red)';
+                    } else {
+                        activeCountEl.style.color = 'var(--accent-green)';
+                    }
+                    renderAlertsTable(alerts);
+                }
+            } catch (err) {
+                console.error("Dashboard refresh error:", err);
+            }
+        }
+
+        function renderTargetsTable(targets) {
+            const tbody = document.getElementById('targets-table-body');
+            if (!targets || targets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No monitored targets configured yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = targets.map(t => `
+                <tr>
+                    <td><code>${escapeHtml(t.id)}</code></td>
+                    <td><strong>${escapeHtml(t.name)}</strong></td>
+                    <td><span class="badge-type">${escapeHtml(t.type)}</span></td>
+                    <td><code>${escapeHtml(t.target)}</code></td>
+                    <td>${t.interval_ms}ms</td>
+                    <td>${t.timeout_ms}ms</td>
+                    <td>
+                        <span class="status-badge ${t.enabled ? 'healthy' : 'unhealthy'}">
+                            ${t.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAlertsTable(alerts) {
+            const tbody = document.getElementById('alerts-table-body');
+            if (!alerts || alerts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No active alert events. All systems operating normally.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = alerts.map(a => `
+                <tr>
+                    <td><strong>${escapeHtml(a.rule_name || a.rule_id || '')}</strong></td>
+                    <td>${escapeHtml(a.target_name || a.target_address || '')}</td>
+                    <td><span class="status-badge unhealthy">${escapeHtml(a.severity || 'alert')}</span></td>
+                    <td>${escapeHtml(a.message || '')}</td>
+                    <td>${escapeHtml(a.fired_at || '')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Fetch on load and refresh every 10 seconds
+        fetchDashboardData();
+        setInterval(fetchDashboardData, 10000);
+    </script>
+</body>
+</html>
