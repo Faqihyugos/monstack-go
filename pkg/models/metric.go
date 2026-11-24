@@ -22,6 +22,14 @@ const (
 	MetricICMPJitter              = "probe_icmp_jitter_ms"
 	MetricTCPConnectSeconds       = "probe_tcp_connect_time_seconds"
 	MetricTCPBannerMatch          = "probe_tcp_banner_match"
+	MetricUDPResponseSeconds      = "probe_udp_response_time_seconds"
+	MetricDNSResolveSeconds       = "probe_dns_resolve_time_seconds"
+	MetricDNSRecordCount          = "probe_dns_record_count"
+	MetricTLSChainValid           = "probe_tls_chain_valid"
+	MetricGRPCResponseSeconds     = "probe_grpc_response_time_seconds"
+	MetricGRPCStatusCode          = "probe_grpc_status_code"
+	MetricSNMPScrapeSeconds       = "probe_snmp_scrape_time_seconds"
+	MetricSNMPOIDCount            = "probe_snmp_oid_count"
 )
 
 // MetricPoint represents a single data point in TSDB.

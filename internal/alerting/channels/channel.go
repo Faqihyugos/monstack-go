@@ -28,6 +28,14 @@ func NewChannel(cfg config.AlertChannelConfig, logger *slog.Logger) (Channel, er
 		return NewTelegramChannel(cfg.Name, cfg.Config, logger)
 	case "webhook":
 		return NewWebhookChannel(cfg.Name, cfg.Config, logger)
+	case "slack":
+		return NewSlackChannel(cfg.Name, cfg.Config, logger)
+	case "discord":
+		return NewDiscordChannel(cfg.Name, cfg.Config, logger)
+	case "email":
+		return NewEmailChannel(cfg.Name, cfg.Config, logger)
+	case "pagerduty":
+		return NewPagerDutyChannel(cfg.Name, cfg.Config, logger)
 	default:
 		return nil, fmt.Errorf("unsupported notification channel type: %q", cfg.Type)
 	}

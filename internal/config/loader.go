@@ -257,9 +257,9 @@ func Validate(cfg *Config) error {
 			targetNames[t.Name] = struct{}{}
 		}
 		switch t.Type {
-		case "http", "icmp", "tcp":
+		case "http", "icmp", "tcp", "udp", "dns", "snmp", "grpc", "tls":
 		default:
-			errs = append(errs, fmt.Sprintf("probes.targets[%d].type %q is unsupported; must be http, icmp, or tcp", i, t.Type))
+			errs = append(errs, fmt.Sprintf("probes.targets[%d].type %q is unsupported; must be http, icmp, tcp, udp, dns, snmp, grpc, or tls", i, t.Type))
 		}
 		if t.Target == "" {
 			errs = append(errs, fmt.Sprintf("probes.targets[%d].target is required", i))

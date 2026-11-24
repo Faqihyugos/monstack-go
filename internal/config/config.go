@@ -146,6 +146,11 @@ type ProbeTargetConfig struct {
 	HTTP       *HTTPProbeConfig  `mapstructure:"http" yaml:"http,omitempty" json:"http,omitempty"`
 	ICMP       *ICMPProbeConfig  `mapstructure:"icmp" yaml:"icmp,omitempty" json:"icmp,omitempty"`
 	TCP        *TCPProbeConfig   `mapstructure:"tcp" yaml:"tcp,omitempty" json:"tcp,omitempty"`
+	UDP        *UDPProbeConfig   `mapstructure:"udp" yaml:"udp,omitempty" json:"udp,omitempty"`
+	DNS        *DNSProbeConfig   `mapstructure:"dns" yaml:"dns,omitempty" json:"dns,omitempty"`
+	SNMP       *SNMPProbeConfig  `mapstructure:"snmp" yaml:"snmp,omitempty" json:"snmp,omitempty"`
+	GRPC       *GRPCProbeConfig  `mapstructure:"grpc" yaml:"grpc,omitempty" json:"grpc,omitempty"`
+	TLS        *TLSProbeConfig   `mapstructure:"tls" yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 // HTTPProbeConfig defines HTTP/HTTPS probe options.
@@ -177,6 +182,49 @@ type TCPProbeConfig struct {
 	Send   string `mapstructure:"send" yaml:"send" json:"send"`
 	Expect string `mapstructure:"expect" yaml:"expect" json:"expect"`
 	TLS    bool   `mapstructure:"tls" yaml:"tls" json:"tls"`
+}
+
+// UDPProbeConfig defines UDP probe options.
+type UDPProbeConfig struct {
+	Send   string `mapstructure:"send" yaml:"send" json:"send"`
+	Expect string `mapstructure:"expect" yaml:"expect" json:"expect"`
+}
+
+// DNSProbeConfig defines DNS query probe options.
+type DNSProbeConfig struct {
+	Server       string `mapstructure:"server" yaml:"server" json:"server"`
+	RecordType   string `mapstructure:"record_type" yaml:"record_type" json:"record_type"`
+	Protocol     string `mapstructure:"protocol" yaml:"protocol" json:"protocol"` // udp | tcp
+	ExpectAnswer string `mapstructure:"expect_answer" yaml:"expect_answer" json:"expect_answer"`
+}
+
+// SNMPOIDConfig defines a named OID to query via SNMP.
+type SNMPOIDConfig struct {
+	Name string `mapstructure:"name" yaml:"name" json:"name"`
+	OID  string `mapstructure:"oid" yaml:"oid" json:"oid"`
+}
+
+// SNMPProbeConfig defines native SNMP v2c/v3 probe options.
+type SNMPProbeConfig struct {
+	Version   string          `mapstructure:"version" yaml:"version" json:"version"` // v2c | v3
+	Port      uint16          `mapstructure:"port" yaml:"port" json:"port"`
+	Community string          `mapstructure:"community" yaml:"community" json:"community"`
+	OIDs      []SNMPOIDConfig `mapstructure:"oids" yaml:"oids" json:"oids"`
+	Walk      []string        `mapstructure:"walk" yaml:"walk" json:"walk"`
+}
+
+// GRPCProbeConfig defines gRPC health check probe options.
+type GRPCProbeConfig struct {
+	Service    string `mapstructure:"service" yaml:"service" json:"service"`
+	TLS        bool   `mapstructure:"tls" yaml:"tls" json:"tls"`
+	SkipVerify bool   `mapstructure:"skip_verify" yaml:"skip_verify" json:"skip_verify"`
+}
+
+// TLSProbeConfig defines TLS certificate probe options.
+type TLSProbeConfig struct {
+	ServerName string `mapstructure:"server_name" yaml:"server_name" json:"server_name"`
+	SkipVerify bool   `mapstructure:"skip_verify" yaml:"skip_verify" json:"skip_verify"`
+	MinVersion string `mapstructure:"min_version" yaml:"min_version" json:"min_version"`
 }
 
 // AlertingConfig defines evaluation interval, rules, channels, and routing.

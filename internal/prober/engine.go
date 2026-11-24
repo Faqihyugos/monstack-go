@@ -70,12 +70,18 @@ func NewEngine(reg Registry, opts ...EngineOption) *DefaultEngine {
 	return e
 }
 
-// NewDefaultEngine creates a prober Engine pre-populated with default probers (HTTP, ICMP, TCP).
+// NewDefaultEngine creates a prober Engine pre-populated with all built-in probers
+// (HTTP, ICMP, TCP, UDP, DNS, TLS, gRPC, SNMP).
 func NewDefaultEngine(opts ...EngineOption) *DefaultEngine {
 	reg := NewRegistry()
 	reg.Register(models.TargetTypeHTTP, NewHTTPProber())
 	reg.Register(models.TargetTypeICMP, NewICMPProber())
 	reg.Register(models.TargetTypeTCP, NewTCPProber())
+	reg.Register(models.TargetTypeUDP, NewUDPProber())
+	reg.Register(models.TargetTypeDNS, NewDNSProber())
+	reg.Register(models.TargetTypeTLS, NewTLSProber())
+	reg.Register(models.TargetTypeGRPC, NewGRPCProber())
+	reg.Register(models.TargetTypeSNMP, NewSNMPProber())
 	return NewEngine(reg, opts...)
 }
 

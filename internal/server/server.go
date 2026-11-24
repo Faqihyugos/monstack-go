@@ -413,6 +413,33 @@ func (s *Server) syncConfigTargets(ctx context.Context, cfg *config.Config) {
 			cfgMap["expect_match"] = tc.TCP.Expect
 			cfgMap["tls"] = tc.TCP.TLS
 		}
+		if tc.UDP != nil {
+			cfgMap["send_payload"] = tc.UDP.Send
+			cfgMap["expect_match"] = tc.UDP.Expect
+		}
+		if tc.DNS != nil {
+			cfgMap["server"] = tc.DNS.Server
+			cfgMap["record_type"] = tc.DNS.RecordType
+			cfgMap["protocol"] = tc.DNS.Protocol
+			cfgMap["expect_answer"] = tc.DNS.ExpectAnswer
+		}
+		if tc.SNMP != nil {
+			cfgMap["version"] = tc.SNMP.Version
+			cfgMap["port"] = tc.SNMP.Port
+			cfgMap["community"] = tc.SNMP.Community
+			cfgMap["oids"] = tc.SNMP.OIDs
+			cfgMap["walk"] = tc.SNMP.Walk
+		}
+		if tc.GRPC != nil {
+			cfgMap["service"] = tc.GRPC.Service
+			cfgMap["tls"] = tc.GRPC.TLS
+			cfgMap["skip_verify"] = tc.GRPC.SkipVerify
+		}
+		if tc.TLS != nil {
+			cfgMap["server_name"] = tc.TLS.ServerName
+			cfgMap["skip_verify"] = tc.TLS.SkipVerify
+			cfgMap["min_version"] = tc.TLS.MinVersion
+		}
 
 		now := time.Now().UTC()
 		tgt := &models.Target{
