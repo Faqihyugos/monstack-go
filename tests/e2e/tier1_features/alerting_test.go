@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
-	"github.com/yourusername/monstack-go/tests/e2e/harness"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/tests/e2e/harness"
 )
 
 // TestAlerting verifies threshold evaluation, 'for' duration, transitions, silences, and Telegram dispatches.

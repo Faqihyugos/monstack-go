@@ -3,7 +3,7 @@ package prober
 import (
 	"sync"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // ProbeType is an alias for models.TargetType to provide type consistency.

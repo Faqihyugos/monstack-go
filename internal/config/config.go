@@ -133,17 +133,19 @@ type ProbeDefaultsConfig struct {
 
 // ProbeTargetConfig defines a specific monitored target.
 type ProbeTargetConfig struct {
-	Name     string            `mapstructure:"name" yaml:"name" json:"name"`
-	Type     string            `mapstructure:"type" yaml:"type" json:"type"` // "http", "icmp", "tcp"
-	Target   string            `mapstructure:"target" yaml:"target" json:"target"`
-	Interval time.Duration     `mapstructure:"interval" yaml:"interval" json:"interval"`
-	Timeout  time.Duration     `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
-	Retries  int               `mapstructure:"retries" yaml:"retries" json:"retries"`
-	Enabled  *bool             `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Labels   map[string]string `mapstructure:"labels" yaml:"labels" json:"labels"`
-	HTTP     *HTTPProbeConfig  `mapstructure:"http" yaml:"http,omitempty" json:"http,omitempty"`
-	ICMP     *ICMPProbeConfig  `mapstructure:"icmp" yaml:"icmp,omitempty" json:"icmp,omitempty"`
-	TCP      *TCPProbeConfig   `mapstructure:"tcp" yaml:"tcp,omitempty" json:"tcp,omitempty"`
+	Name       string            `mapstructure:"name" yaml:"name" json:"name"`
+	Type       string            `mapstructure:"type" yaml:"type" json:"type"` // "http", "icmp", "tcp"
+	Target     string            `mapstructure:"target" yaml:"target" json:"target"`
+	Interval   time.Duration     `mapstructure:"interval" yaml:"interval" json:"interval"`
+	Timeout    time.Duration     `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
+	IntervalMs int               `mapstructure:"interval_ms" yaml:"interval_ms,omitempty" json:"interval_ms,omitempty"`
+	TimeoutMs  int               `mapstructure:"timeout_ms" yaml:"timeout_ms,omitempty" json:"timeout_ms,omitempty"`
+	Retries    int               `mapstructure:"retries" yaml:"retries" json:"retries"`
+	Enabled    *bool             `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Labels     map[string]string `mapstructure:"labels" yaml:"labels" json:"labels"`
+	HTTP       *HTTPProbeConfig  `mapstructure:"http" yaml:"http,omitempty" json:"http,omitempty"`
+	ICMP       *ICMPProbeConfig  `mapstructure:"icmp" yaml:"icmp,omitempty" json:"icmp,omitempty"`
+	TCP        *TCPProbeConfig   `mapstructure:"tcp" yaml:"tcp,omitempty" json:"tcp,omitempty"`
 }
 
 // HTTPProbeConfig defines HTTP/HTTPS probe options.

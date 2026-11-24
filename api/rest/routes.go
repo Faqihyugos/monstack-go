@@ -3,8 +3,8 @@ package rest
 import (
 	"log/slog"
 
+	"github.com/Faqihyugos/monstack-go/internal/config"
 	"github.com/go-chi/chi/v5"
-	"github.com/yourusername/monstack-go/internal/config"
 )
 
 // NewRouter constructs and configures the complete Chi v5 HTTP router.

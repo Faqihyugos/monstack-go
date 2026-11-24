@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/yourusername/monstack-go/internal/prober"
-	"github.com/yourusername/monstack-go/pkg/metrics"
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/internal/prober"
+	"github.com/Faqihyugos/monstack-go/pkg/metrics"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // mockTSDB implements storage.TSDB for engine persistence testing.

@@ -139,6 +139,15 @@ func applyTargetDefaults(cfg *Config) {
 
 	for i := range cfg.Probes.Targets {
 		t := &cfg.Probes.Targets[i]
+		if t.Interval == 0 && t.IntervalMs > 0 {
+			t.Interval = time.Duration(t.IntervalMs) * time.Millisecond
+		}
+		if t.Timeout == 0 && t.TimeoutMs > 0 {
+			t.Timeout = time.Duration(t.TimeoutMs) * time.Millisecond
+			if t.Interval > 0 && t.Timeout > t.Interval {
+				t.Timeout = t.Interval
+			}
+		}
 		if t.Interval == 0 {
 			t.Interval = defaultInterval
 		}

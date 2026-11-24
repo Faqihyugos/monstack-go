@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 	probing "github.com/prometheus-community/pro-bing"
-	"github.com/yourusername/monstack-go/pkg/models"
 )
 
 // ICMPProber executes ICMP ping probes using unprivileged UDP mode.

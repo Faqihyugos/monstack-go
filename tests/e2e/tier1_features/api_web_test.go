@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // TestAPIAndWebDashboard tests the Chi REST API endpoints and embedded web dashboard.

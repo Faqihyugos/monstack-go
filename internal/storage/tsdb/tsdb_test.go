@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/storage/tsdb"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/storage/tsdb"
-	"github.com/yourusername/monstack-go/pkg/models"
 )
 
 func newTestTSDB(t *testing.T) (*tsdb.TSDB, string, func()) {

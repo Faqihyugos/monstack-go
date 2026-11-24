@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // Domain sentinel errors.

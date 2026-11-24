@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/storage"
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/storage"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // seriesKey creates a composite lookup key for a target and metric.

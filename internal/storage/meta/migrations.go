@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yourusername/monstack-go/migrations"
+	"github.com/Faqihyugos/monstack-go/migrations"
 )
 
 // RunMigrations applies all pending embedded SQL migrations sequentially within transactions.

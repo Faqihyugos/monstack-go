@@ -14,16 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/api/rest"
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/prober"
+	"github.com/Faqihyugos/monstack-go/internal/storage/meta"
+	"github.com/Faqihyugos/monstack-go/internal/storage/tsdb"
+	"github.com/Faqihyugos/monstack-go/pkg/health"
+	"github.com/Faqihyugos/monstack-go/pkg/metrics"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/monstack-go/api/rest"
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/prober"
-	"github.com/yourusername/monstack-go/internal/storage/meta"
-	"github.com/yourusername/monstack-go/internal/storage/tsdb"
-	"github.com/yourusername/monstack-go/pkg/health"
-	"github.com/yourusername/monstack-go/pkg/metrics"
-	"github.com/yourusername/monstack-go/pkg/models"
 )
 
 type testRig struct {
@@ -726,5 +726,3 @@ func TestEdgeCasesAndValidation(t *testing.T) {
 	}, authBearer)
 	assert.Equal(t, http.StatusBadRequest, recTgtBadUpdate.Code)
 }
-
-

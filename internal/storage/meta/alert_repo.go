@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yourusername/monstack-go/internal/storage"
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/internal/storage"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // ============================================================================

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/monstack-go/tests/e2e/harness"
+	"github.com/Faqihyugos/monstack-go/tests/e2e/harness"
 )
 
 // TestScheduler verifies ticker dispatching, bounded concurrency, dynamic target addition/removal, and skipping disabled targets.

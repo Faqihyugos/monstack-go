@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -15,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // HTTPProber executes HTTP and HTTPS endpoint probes.
@@ -318,6 +319,34 @@ func (p *HTTPProber) Probe(ctx context.Context, target *models.Target) (*models.
 	result.Metadata["redirect_count"] = redirectCount
 
 	if doErr != nil {
+		var leaf *x509.Certificate
+		if len(capturedPeerCerts) > 0 {
+			leaf = capturedPeerCerts[0]
+		} else {
+			var uaErr x509.UnknownAuthorityError
+			var ciErr x509.CertificateInvalidError
+			var hnErr x509.HostnameError
+			if errors.As(doErr, &uaErr) && uaErr.Cert != nil {
+				leaf = uaErr.Cert
+			} else if errors.As(doErr, &ciErr) && ciErr.Cert != nil {
+				leaf = ciErr.Cert
+			} else if errors.As(doErr, &hnErr) && hnErr.Certificate != nil {
+				leaf = hnErr.Certificate
+			}
+		}
+		if leaf != nil {
+			remainingDays := time.Until(leaf.NotAfter).Hours() / 24.0
+			result.Metrics = append(result.Metrics, models.MetricPoint{
+				TargetID:  target.ID,
+				Metric:    models.MetricHTTPSSLExpiryDays,
+				Value:     remainingDays,
+				Timestamp: now,
+			})
+			result.Metadata["ssl_days_remaining"] = remainingDays
+			result.Metadata["ssl_issuer"] = leaf.Issuer.String()
+			result.Metadata["ssl_subject"] = leaf.Subject.String()
+			result.Metadata["ssl_not_after"] = leaf.NotAfter.UTC().Format(time.RFC3339)
+		}
 		result.Success = false
 		result.Error = doErr.Error()
 		return result, nil

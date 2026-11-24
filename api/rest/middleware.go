@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/internal/config"
 	"github.com/go-chi/cors"
-	"github.com/yourusername/monstack-go/internal/config"
 )
 
 // responseWriterInterceptor wraps http.ResponseWriter to capture the HTTP status code and response size.
 type responseWriterInterceptor struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode   int
 	bytesWritten int64
 }
 

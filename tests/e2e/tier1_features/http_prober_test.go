@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
-	"github.com/yourusername/monstack-go/tests/e2e/harness"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/tests/e2e/harness"
 )
 
 // TestHTTPProber verifies 200 OK, non-200 failures, latency measurement, SSL expiry, content matching, and redirects.

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // Prune removes points older than the given retention duration from in-memory series

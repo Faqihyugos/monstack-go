@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,12 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/prober"
+	"github.com/Faqihyugos/monstack-go/internal/storage"
+	"github.com/Faqihyugos/monstack-go/pkg/health"
+	"github.com/Faqihyugos/monstack-go/pkg/metrics"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 	"github.com/go-chi/chi/v5"
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/prober"
-	"github.com/yourusername/monstack-go/internal/storage"
-	"github.com/yourusername/monstack-go/pkg/health"
-	"github.com/yourusername/monstack-go/pkg/metrics"
 )
 
 // Server wraps the REST API HTTP server and Chi router.
@@ -24,6 +26,7 @@ type Server struct {
 	handlers   *Handlers
 	httpServer *http.Server
 	listener   net.Listener
+	tlsConfig  *tls.Config
 	cfg        *config.Config
 	logger     *slog.Logger
 	mu         sync.Mutex
@@ -158,6 +161,24 @@ func WithHandlers(h *Handlers) ServerOption {
 	}
 }
 
+// WithServerTLSConfig sets an optional TLS configuration for HTTPS serving.
+func WithServerTLSConfig(tlsCfg *tls.Config) ServerOption {
+	return func(s *Server) {
+		s.tlsConfig = tlsCfg
+	}
+}
+
+// WithServerTargetCallbacks registers callbacks triggered immediately on target create/update/delete.
+func WithServerTargetCallbacks(onChange func(*models.Target), onDelete func(string)) ServerOption {
+	return func(s *Server) {
+		if s.handlers == nil {
+			s.handlers = NewHandlers()
+		}
+		s.handlers.onTargetChange = onChange
+		s.handlers.onTargetDelete = onDelete
+	}
+}
+
 // Router returns the underlying Chi router.
 func (s *Server) Router() chi.Router {
 	return s.router
@@ -205,15 +226,20 @@ func (s *Server) Start(ctx context.Context) error {
 	s.httpServer = &http.Server{
 		Addr:         addr,
 		Handler:      s.router,
+		TLSConfig:    s.tlsConfig,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
 	s.running = true
 	s.mu.Unlock()
 
-	s.logger.Info("REST API server listening", "address", ln.Addr().String())
+	s.logger.Info("REST API server listening", "address", ln.Addr().String(), "tls", s.tlsConfig != nil)
 
-	err = s.httpServer.Serve(ln)
+	if s.tlsConfig != nil {
+		err = s.httpServer.ServeTLS(ln, "", "")
+	} else {
+		err = s.httpServer.Serve(ln)
+	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

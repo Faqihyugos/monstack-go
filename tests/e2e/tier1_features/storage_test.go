@@ -7,7 +7,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/yourusername/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
 )
 
 // TestStorageMetadata tests SQLite schema migrations, target CRUD, and alert rules persistence.
@@ -257,7 +257,7 @@ func TestStorageMetadata(t *testing.T) {
 
 		// 3. Create Alert Silence
 		silencePayload := map[string]any{
-			"matchers": `{"target":"prod-api-service"}`,
+			"matchers":  `{"target":"prod-api-service"}`,
 			"starts_at": "2026-11-23T00:00:00Z",
 			"ends_at":   "2026-11-24T00:00:00Z",
 			"comment":   "Scheduled maintenance window",

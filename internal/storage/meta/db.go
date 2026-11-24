@@ -11,8 +11,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/storage"
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/storage"
 )
 
 // DB represents the SQLite metadata storage engine.

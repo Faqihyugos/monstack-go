@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/monstack-go/pkg/models"
-	"github.com/yourusername/monstack-go/tests/e2e/harness"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/tests/e2e/harness"
 )
 
 // TestConfigSystem tests configuration loading, overrides, redaction, defaults, and hot-reload.

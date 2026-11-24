@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/prober"
+	"github.com/Faqihyugos/monstack-go/internal/storage"
+	"github.com/Faqihyugos/monstack-go/pkg/health"
+	"github.com/Faqihyugos/monstack-go/pkg/metrics"
+	"github.com/Faqihyugos/monstack-go/pkg/models"
+	"github.com/Faqihyugos/monstack-go/web"
 	"github.com/go-chi/chi/v5"
-	"github.com/yourusername/monstack-go/internal/config"
-	"github.com/yourusername/monstack-go/internal/prober"
-	"github.com/yourusername/monstack-go/internal/storage"
-	"github.com/yourusername/monstack-go/pkg/health"
-	"github.com/yourusername/monstack-go/pkg/metrics"
-	"github.com/yourusername/monstack-go/pkg/models"
-	"github.com/yourusername/monstack-go/web"
 )
 
 // ReloadFunc defines the callback for reloading configuration dynamically.
@@ -27,15 +27,17 @@ type ReloadFunc func(ctx context.Context) error
 
 // Handlers encapsulates all HTTP request handler implementations and injected dependencies.
 type Handlers struct {
-	meta       storage.MetadataStore
-	tsdb       storage.TSDB
-	prober     prober.Engine
-	cfg        *config.Config
-	health     *health.Registry
-	metrics    *metrics.Metrics
-	reloadFunc ReloadFunc
-	logger     *slog.Logger
-	webHandler http.Handler
+	meta           storage.MetadataStore
+	tsdb           storage.TSDB
+	prober         prober.Engine
+	cfg            *config.Config
+	health         *health.Registry
+	metrics        *metrics.Metrics
+	reloadFunc     ReloadFunc
+	onTargetChange func(*models.Target)
+	onTargetDelete func(string)
+	logger         *slog.Logger
+	webHandler     http.Handler
 }
 
 // HandlersOption configures a Handlers instance.
@@ -261,6 +263,10 @@ func (h *Handlers) CreateTargetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.onTargetChange != nil {
+		h.onTargetChange(&target)
+	}
+
 	respondJSON(w, http.StatusCreated, &target)
 }
 
@@ -357,6 +363,10 @@ func (h *Handlers) UpdateTargetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.onTargetChange != nil {
+		h.onTargetChange(target)
+	}
+
 	respondJSON(w, http.StatusOK, target)
 }
 
@@ -384,6 +394,10 @@ func (h *Handlers) DeleteTargetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	if h.onTargetDelete != nil {
+		h.onTargetDelete(id)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
@@ -423,8 +437,7 @@ func (h *Handlers) GetTargetStatusHandler(w http.ResponseWriter, r *http.Request
 			TargetID:   target.ID,
 			TargetName: target.Name,
 			TargetType: target.Type,
-			Timestamp:  time.Now().UTC(),
-			Success:    true,
+			Success:    false,
 			Metrics:    []models.MetricPoint{},
 			Metadata:   map[string]any{"status": "initialized"},
 		}
@@ -774,6 +787,11 @@ func (h *Handlers) DeleteSilenceHandler(w http.ResponseWriter, r *http.Request) 
 		"status":  "ok",
 		"message": "silence deleted",
 	})
+}
+
+// SetConfig updates the active configuration reference (used on hot-reload).
+func (h *Handlers) SetConfig(cfg *config.Config) {
+	h.cfg = cfg
 }
 
 // GetConfigHandler serves GET /api/v1/config with secrets redacted.
