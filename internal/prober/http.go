@@ -144,6 +144,17 @@ func parseHTTPConfig(target *models.Target) resolvedHTTPConfig {
 	if bm, ok := target.Config["body_match"].(string); ok && bm != "" {
 		cfg.BodyMatch = bm
 	}
+	if tlsRaw, ok := target.Config["tls"].(map[string]any); ok {
+		if sv, ok := tlsRaw["skip_verify"].(bool); ok {
+			cfg.TLSSkipVerify = sv
+		}
+		if mv, ok := tlsRaw["min_version"].(string); ok {
+			cfg.TLSMinVersion = mv
+		}
+	}
+	if sv, ok := target.Config["tls_skip_verify"].(bool); ok {
+		cfg.TLSSkipVerify = sv
+	}
 
 	return cfg
 }
@@ -172,9 +183,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target *models.Target) (*models.
 
 	// Prepare TLS configuration
 	tlsConfig := &tls.Config{
-		// For prober checks, allow InsecureSkipVerify so self-signed certs and internal
-		// endpoints can be inspected for expiry and connectivity without failing root validation
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: cfg.TLSSkipVerify,
 	}
 	switch cfg.TLSMinVersion {
 	case "1.3":
@@ -347,7 +356,27 @@ func (p *HTTPProber) Probe(ctx context.Context, target *models.Target) (*models.
 	}
 
 	// Read response body (capped at 5MB)
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	if readErr != nil {
+		result.Success = false
+		result.Error = fmt.Sprintf("failed to read response body: %v", readErr)
+		updated := false
+		for i := range result.Metrics {
+			if result.Metrics[i].Metric == models.MetricProbeSuccess {
+				result.Metrics[i].Value = 0.0
+				updated = true
+			}
+		}
+		if !updated {
+			result.Metrics = append(result.Metrics, models.MetricPoint{
+				TargetID:  target.ID,
+				Metric:    models.MetricProbeSuccess,
+				Value:     0.0,
+				Timestamp: now,
+			})
+		}
+		return result, nil
+	}
 	bodyStr := string(bodyBytes)
 
 	// Validate expected status code

@@ -390,6 +390,9 @@ func TestHTTPProber(t *testing.T) {
 
 		tg := models.NewTarget("ssl-target", models.TargetTypeHTTP, ts.URL, 5000, 2000)
 		tg.ID = "ssl-1"
+		tg.Config = map[string]any{
+			"tls_skip_verify": true,
+		}
 
 		res, err := p.Probe(context.Background(), tg)
 		require.NoError(t, err)
@@ -886,4 +889,152 @@ func TestTCPProber_TLSConnection(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 	assert.True(t, res.ResponseTime > 0)
+}
+
+func TestHTTPProber_HangingResponseBodyTimeout(t *testing.T) {
+	// Server responds with 200 OK headers immediately, but never finishes sending the body
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		time.Sleep(2 * time.Second)
+	}))
+	defer ts.Close()
+
+	t.Run("DirectHTTPProber_FailsOnStalledBody", func(t *testing.T) {
+		p := prober.NewHTTPProber()
+		tg := models.NewTarget("http-hang-direct", models.TargetTypeHTTP, ts.URL, 1000, 200)
+		tg.ID = "hang-direct-1"
+
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		res, err := p.Probe(ctx, tg)
+		require.NoError(t, err)
+		assert.False(t, res.Success, "Probe must report failure when response body stalls")
+		assert.Contains(t, res.Error, "failed to read response body")
+		assert.Contains(t, res.Error, "deadline exceeded")
+
+		// Verify probe_success in res.Metrics is set to 0.0
+		foundSuccessMetric := false
+		for _, m := range res.Metrics {
+			if m.Metric == models.MetricProbeSuccess {
+				foundSuccessMetric = true
+				assert.Equal(t, 0.0, m.Value, "probe_success metric point must be 0.0")
+			}
+		}
+		assert.True(t, foundSuccessMetric, "probe_success metric point should be present")
+	})
+
+	t.Run("Engine_FailsOnStalledBody", func(t *testing.T) {
+		eng := prober.NewDefaultEngine()
+		tg := models.NewTarget("http-hang-engine", models.TargetTypeHTTP, ts.URL, 1000, 200)
+		tg.ID = "hang-engine-1"
+
+		res, err := eng.Execute(context.Background(), tg)
+		assert.False(t, res.Success, "Engine must report failure when response body stalls")
+		assert.NotEmpty(t, res.Error)
+		assert.Contains(t, res.Error, "deadline exceeded")
+
+		// Verify probe_success in res.Metrics is 0.0
+		foundSuccessMetric := false
+		for _, m := range res.Metrics {
+			if m.Metric == models.MetricProbeSuccess {
+				foundSuccessMetric = true
+				assert.Equal(t, 0.0, m.Value, "probe_success metric must be 0.0")
+			}
+		}
+		assert.True(t, foundSuccessMetric, "probe_success metric point should be present in engine result")
+
+		// Verify ToMetricPoints() returns probe_success 0.0
+		pts := res.ToMetricPoints()
+		for _, pt := range pts {
+			if pt.Metric == models.MetricProbeSuccess {
+				assert.Equal(t, 0.0, pt.Value, "ToMetricPoints must produce probe_success=0.0")
+			}
+		}
+		_ = err
+	})
+}
+
+type hangingMockProber struct{}
+
+func (m *hangingMockProber) Probe(ctx context.Context, target *models.Target) (*models.ProbeResult, error) {
+	<-ctx.Done()
+	return &models.ProbeResult{
+		TargetID:   target.ID,
+		TargetName: target.Name,
+		TargetType: target.Type,
+		Success:    true, // Deliberately returns true to test engine override
+		Metrics: []models.MetricPoint{
+			{
+				TargetID: target.ID,
+				Metric:   models.MetricProbeSuccess,
+				Value:    1.0, // Deliberately claims 1.0
+			},
+		},
+	}, nil
+}
+
+func TestEngine_OverridesSuccessWhenContextDeadlineExpires(t *testing.T) {
+	eng := prober.NewDefaultEngine()
+	mockType := models.TargetTypeUDP
+	eng.RegisterProber(mockType, &hangingMockProber{})
+
+	tg := models.NewTarget("mock-hang", mockType, "127.0.0.1:9999", 1000, 100)
+	tg.ID = "mock-hang-1"
+
+	res, err := eng.Execute(context.Background(), tg)
+	assert.Error(t, err)
+	assert.Equal(t, context.DeadlineExceeded, err)
+	assert.False(t, res.Success, "Engine MUST override prober success to false when context deadline expires")
+	assert.Equal(t, context.DeadlineExceeded.Error(), res.Error)
+
+	// Verify all probe_success metrics in res.Metrics are updated to 0.0
+	var foundMetric bool
+	for _, pt := range res.Metrics {
+		if pt.Metric == models.MetricProbeSuccess {
+			foundMetric = true
+			assert.Equal(t, 0.0, pt.Value, "probe_success metric in res.Metrics must be overridden to 0.0")
+		}
+	}
+	assert.True(t, foundMetric, "probe_success metric must exist in res.Metrics")
+
+	// Verify ToMetricPoints() also produces probe_success = 0.0
+	for _, pt := range res.ToMetricPoints() {
+		if pt.Metric == models.MetricProbeSuccess {
+			assert.Equal(t, 0.0, pt.Value, "ToMetricPoints probe_success MUST be 0.0")
+		}
+	}
+}
+
+func TestHTTPProber_TLSSkipVerify(t *testing.T) {
+	validDays := 30 * 24 * time.Hour
+	ts, err := generateCustomTLSServer(validDays, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	require.NoError(t, err)
+	defer ts.Close()
+
+	p := prober.NewHTTPProber()
+
+	// 1. Without skip_verify (default false) -> handshake fails on self-signed cert
+	tgUntrusted := models.NewTarget("untrusted-tls", models.TargetTypeHTTP, ts.URL, 1000, 2000)
+	tgUntrusted.ID = "untrusted-tls-1"
+	resUntrusted, err := p.Probe(context.Background(), tgUntrusted)
+	require.NoError(t, err)
+	assert.False(t, resUntrusted.Success, "Self-signed certificate must fail without tls_skip_verify")
+	assert.Contains(t, resUntrusted.Error, "certificate")
+
+	// 2. With tls_skip_verify: true -> probe succeeds
+	tgTrusted := models.NewTarget("trusted-tls", models.TargetTypeHTTP, ts.URL, 1000, 2000)
+	tgTrusted.ID = "trusted-tls-1"
+	tgTrusted.Config = map[string]any{
+		"tls_skip_verify": true,
+	}
+	resTrusted, err := p.Probe(context.Background(), tgTrusted)
+	require.NoError(t, err)
+	assert.True(t, resTrusted.Success, "Self-signed certificate must succeed with tls_skip_verify: true")
 }

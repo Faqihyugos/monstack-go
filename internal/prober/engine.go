@@ -194,9 +194,29 @@ func (e *DefaultEngine) Execute(ctx context.Context, target *models.Target) (*mo
 		if res.Error == "" {
 			res.Error = probeErr.Error()
 		}
-	} else if ctxErr := probeCtx.Err(); ctxErr != nil && !res.Success {
+	}
+	if ctxErr := probeCtx.Err(); ctxErr != nil {
+		res.Success = false
 		if res.Error == "" {
 			res.Error = ctxErr.Error()
+		}
+		if probeErr == nil {
+			probeErr = ctxErr
+		}
+		updated := false
+		for i := range res.Metrics {
+			if res.Metrics[i].Metric == models.MetricProbeSuccess {
+				res.Metrics[i].Value = 0.0
+				updated = true
+			}
+		}
+		if !updated {
+			res.Metrics = append(res.Metrics, models.MetricPoint{
+				TargetID:  res.TargetID,
+				Metric:    models.MetricProbeSuccess,
+				Value:     0.0,
+				Timestamp: res.Timestamp,
+			})
 		}
 	}
 
