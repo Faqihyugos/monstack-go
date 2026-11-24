@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -551,4 +552,493 @@ func TestWatcher_CallbackError(t *testing.T) {
 
 	_, err = watcher.Reload()
 	assert.NoError(t, err) // Reload itself succeeds even if a callback returns error
+}
+
+// Test 13: Redaction of hyphenated headers (X-API-Key, API-Key, Cookie, Private-Key) and immutability
+func TestRedacted_HyphenatedHeadersAndImmutability(t *testing.T) {
+	orig := &Config{
+		Auth: AuthConfig{
+			AdminPassword:     "my-super-secret-password",
+			AdminPasswordHash: "$2a$10$hashedsecretpassword",
+			APIKeys: []APIKeyConfig{
+				{Name: "ci", Key: "ci-secret-token-12345"},
+			},
+			JWT: JWTConfig{Secret: "jwt-top-secret-signing-key"},
+		},
+		Alerting: AlertingConfig{
+			Channels: []AlertChannelConfig{
+				{
+					Name: "webhook-sec",
+					Type: "webhook",
+					Config: map[string]any{
+						"webhook_url": "https://hooks.slack.com/services/SECRET/URL/XYZ",
+						"api-key":     "ch-secret-key-999",
+						"cookie":      "session=ch-cookie-value",
+						"public_name": "alerts-prod",
+					},
+				},
+			},
+		},
+		Probes: ProbesConfig{
+			Defaults: ProbeDefaultsConfig{
+				Interval: 30 * time.Second,
+				Timeout:  10 * time.Second,
+				Retries:  2,
+			},
+			Targets: []ProbeTargetConfig{
+				{
+					Name:     "secure-api",
+					Type:     "http",
+					Target:   "https://api.example.com",
+					Interval: 15 * time.Second,
+					Timeout:  5 * time.Second,
+					Retries:  2,
+					HTTP: &HTTPProbeConfig{
+						Method: "GET",
+						Headers: map[string]string{
+							"X-API-Key":      "my-secret-api-key",
+							"API-Key":        "top-secret-api-key",
+							"Cookie":         "session=abcdef1234567890",
+							"Private-Key":    "-----BEGIN RSA PRIVATE KEY-----",
+							"X-Service-Key":  "svc-secret-8888",
+							"Authorization":  "Bearer token-jwt-12345",
+							"X-Webhook-URL":  "https://discord.com/api/webhooks/secret",
+							"Content-Type":   "application/json",
+							"User-Agent":     "MonStack-Prober/1.0",
+							"Accept":         "application/json",
+							"X-Custom-Trace": "trace-uuid-112233",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	redacted := orig.Redacted()
+	require.NotNil(t, redacted)
+
+	// 1. Verify sensitive headers are masked with "***"
+	redactedHeaders := redacted.Probes.Targets[0].HTTP.Headers
+	assert.Equal(t, "***", redactedHeaders["X-API-Key"], "X-API-Key must be masked")
+	assert.Equal(t, "***", redactedHeaders["API-Key"], "API-Key must be masked")
+	assert.Equal(t, "***", redactedHeaders["Cookie"], "Cookie must be masked")
+	assert.Equal(t, "***", redactedHeaders["Private-Key"], "Private-Key must be masked")
+	assert.Equal(t, "***", redactedHeaders["X-Service-Key"], "X-Service-Key must be masked")
+	assert.Equal(t, "***", redactedHeaders["Authorization"], "Authorization must be masked")
+	assert.Equal(t, "***", redactedHeaders["X-Webhook-URL"], "X-Webhook-URL must be masked")
+
+	// 2. Verify non-sensitive headers are preserved intact
+	assert.Equal(t, "application/json", redactedHeaders["Content-Type"])
+	assert.Equal(t, "MonStack-Prober/1.0", redactedHeaders["User-Agent"])
+	assert.Equal(t, "application/json", redactedHeaders["Accept"])
+	assert.Equal(t, "trace-uuid-112233", redactedHeaders["X-Custom-Trace"])
+
+	// 3. Verify channel secrets are masked
+	chCfg := redacted.Alerting.Channels[0].Config
+	assert.Equal(t, "***", chCfg["webhook_url"])
+	assert.Equal(t, "***", chCfg["api-key"])
+	assert.Equal(t, "***", chCfg["cookie"])
+	assert.Equal(t, "alerts-prod", chCfg["public_name"])
+
+	// 4. Verify JSON marshaled output contains ZERO sensitive strings
+	redactedJSON, err := json.Marshal(redacted)
+	require.NoError(t, err)
+	redactedStr := string(redactedJSON)
+
+	sensitiveSecrets := []string{
+		"my-secret-api-key",
+		"top-secret-api-key",
+		"session=abcdef1234567890",
+		"-----BEGIN RSA PRIVATE KEY-----",
+		"svc-secret-8888",
+		"token-jwt-12345",
+		"https://discord.com/api/webhooks/secret",
+		"my-super-secret-password",
+		"ci-secret-token-12345",
+		"jwt-top-secret-signing-key",
+		"https://hooks.slack.com/services/SECRET/URL/XYZ",
+		"ch-secret-key-999",
+		"ch-cookie-value",
+	}
+	for _, sec := range sensitiveSecrets {
+		assert.False(t, strings.Contains(redactedStr, sec), "Redacted JSON must not leak secret: %s", sec)
+	}
+
+	// 5. Verify IMMUTABILITY of the original config
+	origHeaders := orig.Probes.Targets[0].HTTP.Headers
+	assert.Equal(t, "my-secret-api-key", origHeaders["X-API-Key"], "Original config must not be mutated")
+	assert.Equal(t, "top-secret-api-key", origHeaders["API-Key"], "Original config must not be mutated")
+	assert.Equal(t, "session=abcdef1234567890", origHeaders["Cookie"], "Original config must not be mutated")
+	assert.Equal(t, "-----BEGIN RSA PRIVATE KEY-----", origHeaders["Private-Key"], "Original config must not be mutated")
+	assert.Equal(t, "svc-secret-8888", origHeaders["X-Service-Key"], "Original config must not be mutated")
+	assert.Equal(t, "Bearer token-jwt-12345", origHeaders["Authorization"], "Original config must not be mutated")
+	assert.Equal(t, "https://discord.com/api/webhooks/secret", origHeaders["X-Webhook-URL"], "Original config must not be mutated")
+	assert.Equal(t, "my-super-secret-password", orig.Auth.AdminPassword)
+	assert.Equal(t, "ci-secret-token-12345", orig.Auth.APIKeys[0].Key)
+	assert.Equal(t, "jwt-top-secret-signing-key", orig.Auth.JWT.Secret)
+	assert.Equal(t, "https://hooks.slack.com/services/SECRET/URL/XYZ", orig.Alerting.Channels[0].Config["webhook_url"])
+}
+
+// Test 14: Non-positive probe intervals, timeouts, and retries validation
+func TestValidate_NegativeAndZeroIntervals(t *testing.T) {
+	baseCfg := func() *Config {
+		return &Config{
+			Server: ServerConfig{
+				Listen: ":8443",
+				Mode:   "http",
+			},
+			Storage: StorageConfig{
+				TSDB: TSDBConfig{
+					Path:      "/tmp/data",
+					Retention: "30d",
+					MaxDisk:   "50GB",
+				},
+				Metadata: MetadataConfig{Path: "/tmp/meta.db"},
+			},
+			Logging: LoggingConfig{Level: "info", Format: "json"},
+			Alerting: AlertingConfig{
+				EvaluationInterval: 10 * time.Second,
+			},
+			Probes: ProbesConfig{
+				Defaults: ProbeDefaultsConfig{
+					Interval: 30 * time.Second,
+					Timeout:  10 * time.Second,
+					Retries:  2,
+				},
+				Targets: []ProbeTargetConfig{
+					{
+						Name:     "t1",
+						Type:     "http",
+						Target:   "http://example.com",
+						Interval: 15 * time.Second,
+						Timeout:  5 * time.Second,
+						Retries:  2,
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("defaults.interval <= 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Defaults.Interval = 0
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.interval must be greater than zero")
+
+		cfg.Probes.Defaults.Interval = -10 * time.Second
+		err = Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.interval must be greater than zero")
+	})
+
+	t.Run("defaults.timeout <= 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Defaults.Timeout = 0
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.timeout must be greater than zero")
+
+		cfg.Probes.Defaults.Timeout = -5 * time.Second
+		err = Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.timeout must be greater than zero")
+	})
+
+	t.Run("defaults.timeout > defaults.interval", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Defaults.Interval = 10 * time.Second
+		cfg.Probes.Defaults.Timeout = 15 * time.Second
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.timeout cannot be greater than interval")
+	})
+
+	t.Run("defaults.retries < 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Defaults.Retries = -1
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.retries must be non-negative")
+	})
+
+	t.Run("target.interval <= 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Targets[0].Interval = 0
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].interval must be greater than zero")
+
+		cfg.Probes.Targets[0].Interval = -10 * time.Second
+		err = Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].interval must be greater than zero")
+	})
+
+	t.Run("target.timeout <= 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Targets[0].Timeout = 0
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].timeout must be greater than zero")
+
+		cfg.Probes.Targets[0].Timeout = -5 * time.Second
+		err = Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].timeout must be greater than zero")
+	})
+
+	t.Run("target.timeout > target.interval", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Targets[0].Interval = 5 * time.Second
+		cfg.Probes.Targets[0].Timeout = 10 * time.Second
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].timeout cannot be greater than interval")
+	})
+
+	t.Run("target.retries < 0", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Probes.Targets[0].Retries = -1
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].retries must be non-negative")
+	})
+
+	t.Run("Load with negative target interval YAML fails", func(t *testing.T) {
+		yamlContent := `
+server:
+  listen: ":8443"
+  mode: http
+storage:
+  tsdb:
+    path: "/tmp/data"
+    retention: 30d
+    max_disk: 50GB
+  metadata:
+    path: "/tmp/meta.db"
+probes:
+  defaults:
+    interval: 30s
+    timeout: 10s
+    retries: 2
+  targets:
+    - name: neg-target
+      type: http
+      target: http://example.com
+      interval: -10s
+`
+		tmpDir := t.TempDir()
+		cfgPath := filepath.Join(tmpDir, "monstack.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte(yamlContent), 0644))
+
+		_, err := Load(cfgPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.targets[0].interval must be greater than zero")
+	})
+
+	t.Run("Load with negative default interval YAML fails", func(t *testing.T) {
+		yamlContent := `
+server:
+  listen: ":8443"
+  mode: http
+storage:
+  tsdb:
+    path: "/tmp/data"
+    retention: 30d
+    max_disk: 50GB
+  metadata:
+    path: "/tmp/meta.db"
+probes:
+  defaults:
+    interval: -10s
+    timeout: 5s
+    retries: 2
+  targets:
+    - name: test-target
+      type: http
+      target: http://example.com
+`
+		tmpDir := t.TempDir()
+		cfgPath := filepath.Join(tmpDir, "monstack.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte(yamlContent), 0644))
+
+		_, err := Load(cfgPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "probes.defaults.interval must be greater than zero")
+	})
+}
+
+// Test 15: TSDB retention and max_disk format validation
+func TestValidate_TSDBRetentionAndMaxDisk(t *testing.T) {
+	baseCfg := func() *Config {
+		return &Config{
+			Server: ServerConfig{
+				Listen: ":8443",
+				Mode:   "http",
+			},
+			Storage: StorageConfig{
+				TSDB: TSDBConfig{
+					Path:      "/tmp/data",
+					Retention: "30d",
+					MaxDisk:   "50GB",
+				},
+				Metadata: MetadataConfig{Path: "/tmp/meta.db"},
+			},
+			Logging: LoggingConfig{Level: "info", Format: "json"},
+			Alerting: AlertingConfig{
+				EvaluationInterval: 10 * time.Second,
+			},
+			Probes: ProbesConfig{
+				Defaults: ProbeDefaultsConfig{
+					Interval: 30 * time.Second,
+					Timeout:  10 * time.Second,
+					Retries:  2,
+				},
+				Targets: []ProbeTargetConfig{
+					{
+						Name:     "t1",
+						Type:     "http",
+						Target:   "http://example.com",
+						Interval: 15 * time.Second,
+						Timeout:  5 * time.Second,
+						Retries:  2,
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("invalid retention syntax", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.Retention = "invalid_retention"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid storage.tsdb.retention")
+	})
+
+	t.Run("zero retention duration", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.Retention = "0d"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage.tsdb.retention must be greater than zero")
+	})
+
+	t.Run("negative retention duration", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.Retention = "-10d"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage.tsdb.retention must be greater than zero")
+	})
+
+	t.Run("invalid max_disk syntax", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.MaxDisk = "INVALID_MAX_DISK"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid storage.tsdb.max_disk")
+
+		cfg.Storage.TSDB.MaxDisk = "999XB"
+		err = Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid storage.tsdb.max_disk")
+	})
+
+	t.Run("zero max_disk", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.MaxDisk = "0GB"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage.tsdb.max_disk must be greater than zero")
+	})
+
+	t.Run("negative max_disk", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Storage.TSDB.MaxDisk = "-50MB"
+		err := Validate(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage.tsdb.max_disk must be greater than zero")
+	})
+
+	t.Run("Load with bogus retention YAML fails", func(t *testing.T) {
+		yamlContent := `
+server:
+  listen: ":8443"
+  mode: http
+storage:
+  tsdb:
+    path: "/tmp/data"
+    retention: "not_a_duration"
+    max_disk: 50GB
+  metadata:
+    path: "/tmp/meta.db"
+`
+		tmpDir := t.TempDir()
+		cfgPath := filepath.Join(tmpDir, "monstack.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte(yamlContent), 0644))
+
+		_, err := Load(cfgPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid storage.tsdb.retention")
+	})
+
+	t.Run("Load with bogus max_disk YAML fails", func(t *testing.T) {
+		yamlContent := `
+server:
+  listen: ":8443"
+  mode: http
+storage:
+  tsdb:
+    path: "/tmp/data"
+    retention: 30d
+    max_disk: "INVALID_BYTES"
+  metadata:
+    path: "/tmp/meta.db"
+`
+		tmpDir := t.TempDir()
+		cfgPath := filepath.Join(tmpDir, "monstack.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte(yamlContent), 0644))
+
+		_, err := Load(cfgPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid storage.tsdb.max_disk")
+	})
+}
+
+// Test 16: Case-insensitive duration parsing
+func TestParseDuration_CaseInsensitive(t *testing.T) {
+	// Lowercase 'd'
+	d, err := ParseDuration("30d")
+	require.NoError(t, err)
+	assert.Equal(t, 30*24*time.Hour, d)
+
+	// Uppercase 'D'
+	d, err = ParseDuration("30D")
+	require.NoError(t, err)
+	assert.Equal(t, 30*24*time.Hour, d)
+
+	// Fractional uppercase 'D'
+	d, err = ParseDuration("1.5D")
+	require.NoError(t, err)
+	assert.Equal(t, 36*time.Hour, d)
+
+	// Uppercase hours, minutes, seconds
+	d, err = ParseDuration("24H")
+	require.NoError(t, err)
+	assert.Equal(t, 24*time.Hour, d)
+
+	d, err = ParseDuration("10M")
+	require.NoError(t, err)
+	assert.Equal(t, 10*time.Minute, d)
+
+	d, err = ParseDuration("45S")
+	require.NoError(t, err)
+	assert.Equal(t, 45*time.Second, d)
+
+	// Mixed case and spaces
+	d, err = ParseDuration("  7D  ")
+	require.NoError(t, err)
+	assert.Equal(t, 7*24*time.Hour, d)
 }

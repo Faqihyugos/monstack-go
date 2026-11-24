@@ -115,16 +115,26 @@ func setDefaults(v *viper.Viper) {
 // applyTargetDefaults sets default probe interval/timeout/retries if omitted in individual targets.
 func applyTargetDefaults(cfg *Config) {
 	defaultInterval := cfg.Probes.Defaults.Interval
-	if defaultInterval == 0 {
+	if defaultInterval <= 0 {
 		defaultInterval = 30 * time.Second
 	}
 	defaultTimeout := cfg.Probes.Defaults.Timeout
-	if defaultTimeout == 0 {
+	if defaultTimeout <= 0 {
 		defaultTimeout = 10 * time.Second
 	}
 	defaultRetries := cfg.Probes.Defaults.Retries
-	if defaultRetries == 0 {
+	if defaultRetries <= 0 {
 		defaultRetries = 2
+	}
+
+	if cfg.Probes.Defaults.Interval == 0 {
+		cfg.Probes.Defaults.Interval = defaultInterval
+	}
+	if cfg.Probes.Defaults.Timeout == 0 {
+		cfg.Probes.Defaults.Timeout = defaultTimeout
+	}
+	if cfg.Probes.Defaults.Retries == 0 {
+		cfg.Probes.Defaults.Retries = defaultRetries
 	}
 
 	for i := range cfg.Probes.Targets {
@@ -185,6 +195,16 @@ func Validate(cfg *Config) error {
 	if cfg.Storage.TSDB.Path == "" {
 		errs = append(errs, "storage.tsdb.path is required")
 	}
+	if ret, err := cfg.Storage.TSDB.RetentionDuration(); err != nil {
+		errs = append(errs, fmt.Sprintf("invalid storage.tsdb.retention %q: %v", cfg.Storage.TSDB.Retention, err))
+	} else if ret <= 0 {
+		errs = append(errs, fmt.Sprintf("storage.tsdb.retention must be greater than zero, got %s", cfg.Storage.TSDB.Retention))
+	}
+	if maxDisk, err := cfg.Storage.TSDB.MaxDiskBytes(); err != nil {
+		errs = append(errs, fmt.Sprintf("invalid storage.tsdb.max_disk %q: %v", cfg.Storage.TSDB.MaxDisk, err))
+	} else if maxDisk <= 0 {
+		errs = append(errs, fmt.Sprintf("storage.tsdb.max_disk must be greater than zero, got %s", cfg.Storage.TSDB.MaxDisk))
+	}
 	if cfg.Storage.Metadata.Path == "" {
 		errs = append(errs, "storage.metadata.path is required")
 	}
@@ -200,6 +220,20 @@ func Validate(cfg *Config) error {
 	case "json", "text":
 	default:
 		errs = append(errs, fmt.Sprintf("invalid logging.format %q: must be json or text", cfg.Logging.Format))
+	}
+
+	// Validate Probe Defaults
+	if cfg.Probes.Defaults.Interval <= 0 {
+		errs = append(errs, "probes.defaults.interval must be greater than zero")
+	}
+	if cfg.Probes.Defaults.Timeout <= 0 {
+		errs = append(errs, "probes.defaults.timeout must be greater than zero")
+	}
+	if cfg.Probes.Defaults.Timeout > cfg.Probes.Defaults.Interval && cfg.Probes.Defaults.Interval > 0 {
+		errs = append(errs, "probes.defaults.timeout cannot be greater than interval")
+	}
+	if cfg.Probes.Defaults.Retries < 0 {
+		errs = append(errs, "probes.defaults.retries must be non-negative")
 	}
 
 	// Validate Targets
@@ -220,6 +254,18 @@ func Validate(cfg *Config) error {
 		}
 		if t.Target == "" {
 			errs = append(errs, fmt.Sprintf("probes.targets[%d].target is required", i))
+		}
+		if t.Interval <= 0 {
+			errs = append(errs, fmt.Sprintf("probes.targets[%d].interval must be greater than zero", i))
+		}
+		if t.Timeout <= 0 {
+			errs = append(errs, fmt.Sprintf("probes.targets[%d].timeout must be greater than zero", i))
+		}
+		if t.Timeout > t.Interval && t.Interval > 0 {
+			errs = append(errs, fmt.Sprintf("probes.targets[%d].timeout cannot be greater than interval", i))
+		}
+		if t.Retries < 0 {
+			errs = append(errs, fmt.Sprintf("probes.targets[%d].retries must be non-negative", i))
 		}
 	}
 

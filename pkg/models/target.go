@@ -133,7 +133,7 @@ func (t *Target) Validate() error {
 	switch t.Type {
 	case TargetTypeHTTP:
 		u, err := url.ParseRequestURI(t.Target)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.TrimSpace(u.Host) == "" {
 			return fmt.Errorf("invalid HTTP target URL: %s", t.Target)
 		}
 	case TargetTypeTCP:

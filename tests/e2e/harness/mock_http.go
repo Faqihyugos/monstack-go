@@ -131,16 +131,16 @@ func GenerateSelfSignedCert(opts TLSCertOptions) (tls.Certificate, *x509.Certifi
 
 // MockHTTPServer provides a configurable HTTP/HTTPS mock server for E2E prober tests.
 type MockHTTPServer struct {
-	server             *httptest.Server
-	mu                 sync.RWMutex
-	requests           []HTTPRequestRecord
-	defaultStatusCode  int
-	defaultBody        string
-	defaultHeaders     map[string]string
-	delay              time.Duration
-	routes             map[string]http.HandlerFunc
-	tlsCert            *x509.Certificate
-	closed             bool
+	server            *httptest.Server
+	mu                sync.RWMutex
+	requests          []HTTPRequestRecord
+	defaultStatusCode int
+	defaultBody       string
+	defaultHeaders    map[string]string
+	delay             time.Duration
+	routes            map[string]http.HandlerFunc
+	tlsCert           *x509.Certificate
+	closed            bool
 }
 
 // NewMockHTTPServer creates and starts an HTTP mock server with 200 OK default response.

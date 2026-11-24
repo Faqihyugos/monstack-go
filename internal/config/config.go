@@ -83,7 +83,7 @@ type StorageConfig struct {
 type TSDBConfig struct {
 	Path          string        `mapstructure:"path" yaml:"path" json:"path"`
 	Retention     string        `mapstructure:"retention" yaml:"retention" json:"retention"` // e.g. "30d"
-	MaxDisk       string        `mapstructure:"max_disk" yaml:"max_disk" json:"max_disk"`   // e.g. "50GB"
+	MaxDisk       string        `mapstructure:"max_disk" yaml:"max_disk" json:"max_disk"`    // e.g. "50GB"
 	BlockDuration time.Duration `mapstructure:"block_duration" yaml:"block_duration" json:"block_duration"`
 }
 
@@ -247,7 +247,7 @@ type TelemetryConfig struct {
 
 // ParseDuration handles standard durations plus 'd' (days).
 func ParseDuration(s string) (time.Duration, error) {
-	s = strings.TrimSpace(s)
+	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" {
 		return 0, nil
 	}

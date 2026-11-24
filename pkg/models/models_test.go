@@ -180,6 +180,50 @@ func TestTarget_Validate_Failures(t *testing.T) {
 			errSubstr: "invalid HTTP target URL",
 		},
 		{
+			name: "HTTP target with empty host (http://)",
+			target: &Target{
+				Name:       "test-empty-host-http",
+				Type:       TargetTypeHTTP,
+				Target:     "http://",
+				IntervalMs: 1000,
+				TimeoutMs:  500,
+			},
+			errSubstr: "invalid HTTP target URL",
+		},
+		{
+			name: "HTTP target with empty host (https://)",
+			target: &Target{
+				Name:       "test-empty-host-https",
+				Type:       TargetTypeHTTP,
+				Target:     "https://",
+				IntervalMs: 1000,
+				TimeoutMs:  500,
+			},
+			errSubstr: "invalid HTTP target URL",
+		},
+		{
+			name: "HTTP target hostless with path (http:///path)",
+			target: &Target{
+				Name:       "test-hostless-path",
+				Type:       TargetTypeHTTP,
+				Target:     "http:///path",
+				IntervalMs: 1000,
+				TimeoutMs:  500,
+			},
+			errSubstr: "invalid HTTP target URL",
+		},
+		{
+			name: "HTTP target whitespace host (http://   /path)",
+			target: &Target{
+				Name:       "test-whitespace-host",
+				Type:       TargetTypeHTTP,
+				Target:     "http://   /path",
+				IntervalMs: 1000,
+				TimeoutMs:  500,
+			},
+			errSubstr: "invalid HTTP target URL",
+		},
+		{
 			name: "Invalid TCP address format",
 			target: &Target{
 				Name:       "test",
@@ -447,11 +491,11 @@ func TestAlertRule_Validate_And_ForDuration(t *testing.T) {
 func TestAlertEvent_Validate(t *testing.T) {
 	now := time.Now().UTC()
 	validEvent := &AlertEvent{
-		RuleID:    "r1",
-		Status:    AlertStatusFiring,
-		Severity:  SeverityCritical,
-		FiredAt:   now,
-		Message:   "Target down",
+		RuleID:   "r1",
+		Status:   AlertStatusFiring,
+		Severity: SeverityCritical,
+		FiredAt:  now,
+		Message:  "Target down",
 	}
 	assert.NoError(t, validEvent.Validate())
 

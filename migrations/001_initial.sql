@@ -1,6 +1,18 @@
 -- Migration 001: Initial schema
 -- MonStack-Go metadata database
 
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    applied_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS targets (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     name        TEXT NOT NULL UNIQUE,

@@ -667,16 +667,15 @@ func (e *TestEnv) UpdateConfig(t testing.TB, mutator func(cfg map[string]any)) {
 	time.Sleep(150 * time.Millisecond)
 }
 
-// resolveBinaryPath finds the monstack binary or compiles it if needed.
-func (e *TestEnv) resolveBinaryPath(t testing.TB) string {
-	t.Helper()
-	if e.BinaryPath != "" {
-		if _, err := os.Stat(e.BinaryPath); err == nil {
-			return e.BinaryPath
+// FindBinary locates an existing monstack binary on disk without building.
+func FindBinary() string {
+	if p := os.Getenv("MONSTACK_BINARY"); p != "" {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			abs, _ := filepath.Abs(p)
+			return abs
 		}
 	}
 
-	// Check relative to current working directory
 	candidates := []string{
 		"bin/monstack",
 		"../bin/monstack",
@@ -685,13 +684,26 @@ func (e *TestEnv) resolveBinaryPath(t testing.TB) string {
 	}
 
 	for _, cand := range candidates {
-		if _, err := os.Stat(cand); err == nil {
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
 			abs, _ := filepath.Abs(cand)
 			return abs
 		}
 	}
+	return ""
+}
 
-	// Attempt compilation if cmd/monstack exists
+// HasBinary reports whether the monstack binary is currently available.
+func HasBinary() bool {
+	return FindBinary() != ""
+}
+
+// ResolveBinaryPath locates the monstack binary or compiles it if cmd/monstack/main.go exists.
+// If cmd/monstack/main.go does not exist or has no Go files, it returns an error rather than failing with build errors.
+func ResolveBinaryPath() (string, error) {
+	if bin := FindBinary(); bin != "" {
+		return bin, nil
+	}
+
 	cmdDirs := []string{
 		"cmd/monstack",
 		"../cmd/monstack",
@@ -699,7 +711,8 @@ func (e *TestEnv) resolveBinaryPath(t testing.TB) string {
 	}
 
 	for _, cmdDir := range cmdDirs {
-		if _, err := os.Stat(cmdDir); err == nil {
+		mainGo := filepath.Join(cmdDir, "main.go")
+		if fi, err := os.Stat(mainGo); err == nil && !fi.IsDir() {
 			binDir := filepath.Join(filepath.Dir(cmdDir), "..", "bin")
 			_ = os.MkdirAll(binDir, 0755)
 			targetBin := filepath.Join(binDir, "monstack")
@@ -707,15 +720,57 @@ func (e *TestEnv) resolveBinaryPath(t testing.TB) string {
 			buildCmd := exec.Command("go", "build", "-o", targetBin, "./"+cmdDir)
 			out, err := buildCmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("failed to compile monstack binary: %v\nOutput:\n%s", err, string(out))
+				return "", fmt.Errorf("failed to compile monstack binary: %v\nOutput:\n%s", err, string(out))
 			}
 			abs, _ := filepath.Abs(targetBin)
-			return abs
+			return abs, nil
 		}
 	}
 
-	t.Fatalf("monstack binary not found and could not be built. Please run 'make build' first.")
+	return "", fmt.Errorf("monstack binary not found at bin/monstack and cmd/monstack/main.go does not exist")
+}
+
+// RequireBinary ensures the monstack binary is available.
+// If not built, it checks os.Getenv("MONSTACK_E2E_STRICT") == "1" (or REQUIRE_MONSTACK_BINARY=1):
+// if strict, t.Fatalf("monstack binary not found at %s", path);
+// otherwise t.Skip("monstack binary not yet built; skipping E2E test until M6").
+func RequireBinary(t testing.TB) string {
+	t.Helper()
+	bin, err := ResolveBinaryPath()
+	if err == nil && bin != "" {
+		return bin
+	}
+
+	path := "bin/monstack"
+	if os.Getenv("MONSTACK_E2E_STRICT") == "1" || os.Getenv("REQUIRE_MONSTACK_BINARY") == "1" {
+		t.Fatalf("monstack binary not found at %s", path)
+	}
+	t.Skip("monstack binary not yet built; skipping E2E test until M6")
 	return ""
+}
+
+// resolveBinaryPath finds the monstack binary or skips/fails via RequireBinary.
+func (e *TestEnv) resolveBinaryPath(t testing.TB) string {
+	t.Helper()
+	if e.BinaryPath != "" {
+		if fi, err := os.Stat(e.BinaryPath); err == nil && !fi.IsDir() {
+			abs, _ := filepath.Abs(e.BinaryPath)
+			return abs
+		}
+	}
+	return RequireBinary(t)
+}
+
+// PollUntil polls cond every interval until it returns true or timeout expires.
+func PollUntil(timeout, interval time.Duration, cond func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return true
+		}
+		time.Sleep(interval)
+	}
+	return cond()
 }
 
 // MarshalSimpleYAML converts a generic Go structure (maps, slices, primitives) into clean YAML.

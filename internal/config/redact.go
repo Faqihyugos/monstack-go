@@ -72,14 +72,15 @@ func (c *Config) Redacted() *Config {
 
 // isSensitiveKey checks whether a field name implies a secret credential.
 func isSensitiveKey(key string) bool {
-	lower := strings.ToLower(key)
+	normalized := strings.ReplaceAll(strings.ToLower(key), "-", "_")
 	terms := []string{
 		"password", "passwd", "secret", "token", "bot_token",
 		"api_key", "apikey", "service_key", "authorization",
-		"private_key", "webhook_url",
+		"private_key", "webhook_url", "webhook", "cookie",
+		"key", "secret", "token", "auth",
 	}
 	for _, term := range terms {
-		if strings.Contains(lower, term) {
+		if strings.Contains(normalized, term) {
 			return true
 		}
 	}

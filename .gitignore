@@ -1,0 +1,49 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+*.out
+*.prof
+
+# Dependency
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directories
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Certificates
+*.pem
+*.key
+*.crt
+!configs/examples/*
+
+# Environment
+.env
+.env.*
+
+# Coverage
+coverage.html
+coverage.txt
