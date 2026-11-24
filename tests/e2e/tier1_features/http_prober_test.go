@@ -1,7 +1,6 @@
 package tier1_features_test
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
