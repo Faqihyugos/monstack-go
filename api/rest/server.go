@@ -179,6 +179,16 @@ func WithServerTargetCallbacks(onChange func(*models.Target), onDelete func(stri
 	}
 }
 
+// WithServerAgentCommander registers a callback to push remote commands to connected gRPC agents.
+func WithServerAgentCommander(fn func(agentID, cmd string, params map[string]string) error) ServerOption {
+	return func(s *Server) {
+		if s.handlers == nil {
+			s.handlers = NewHandlers()
+		}
+		s.handlers.agentCommander = fn
+	}
+}
+
 // Router returns the underlying Chi router.
 func (s *Server) Router() chi.Router {
 	return s.router

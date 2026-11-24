@@ -46,6 +46,16 @@ func NewRouter(h *Handlers, authCfg *config.AuthConfig, logger *slog.Logger) chi
 			})
 		})
 
+		// Agents Management
+		r.Route("/agents", func(r chi.Router) {
+			r.Get("/", h.ListAgentsHandler)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetAgentHandler)
+				r.Delete("/", h.DeleteAgentHandler)
+				r.Post("/command", h.SendAgentCommandHandler)
+			})
+		})
+
 		// Alerting & Rules
 		r.Route("/alerts", func(r chi.Router) {
 			r.Get("/", h.ListAlertsHandler)

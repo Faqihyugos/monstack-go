@@ -47,6 +47,13 @@ type MetadataStore interface {
 	CreateSilence(ctx context.Context, silence *models.AlertSilence) error
 	ListActiveSilences(ctx context.Context, now time.Time) ([]*models.AlertSilence, error)
 	DeleteSilence(ctx context.Context, id string) error
+
+	// Agents
+	UpsertAgent(ctx context.Context, agent *models.Agent) error
+	GetAgent(ctx context.Context, id string) (*models.Agent, error)
+	ListAgents(ctx context.Context, status string) ([]*models.Agent, error)
+	UpdateAgentHeartbeat(ctx context.Context, id string, lastSeen time.Time, status models.AgentStatus) error
+	DeleteAgent(ctx context.Context, id string) error
 }
 
 // TSDB defines the Time-Series Database interface.

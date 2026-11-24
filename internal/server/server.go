@@ -15,6 +15,7 @@ import (
 
 	"github.com/Faqihyugos/monstack-go/api/rest"
 	"github.com/Faqihyugos/monstack-go/internal/alerting"
+	"github.com/Faqihyugos/monstack-go/internal/collector"
 	"github.com/Faqihyugos/monstack-go/internal/config"
 	"github.com/Faqihyugos/monstack-go/internal/prober"
 	"github.com/Faqihyugos/monstack-go/internal/scheduler"
@@ -45,6 +46,7 @@ type Server struct {
 	silencer  *alerting.Silencer
 	evaluator *alerting.Evaluator
 	scheduler *scheduler.Scheduler
+	collector *collector.CollectorServer
 	restSrv   *rest.Server
 
 	mu      sync.Mutex
@@ -109,6 +111,19 @@ func New(configPath, version string) (*Server, error) {
 	sched := scheduler.NewScheduler(metaStore, engine, 16, m, log)
 	sched.SetOnProbeComplete(evaluator.Trigger)
 
+	var grpcCollector *collector.CollectorServer
+	if strings.TrimSpace(cfg.GRPC.Listen) != "" {
+		grpcCollector = collector.NewCollectorServer(
+			cfg.GRPC.Listen,
+			version,
+			nil,
+			metaStore,
+			tsdbStore,
+			m,
+			log,
+		)
+	}
+
 	srv := &Server{
 		configPath: configPath,
 		version:    version,
@@ -123,6 +138,7 @@ func New(configPath, version string) (*Server, error) {
 		silencer:   silencer,
 		evaluator:  evaluator,
 		scheduler:  sched,
+		collector:  grpcCollector,
 	}
 
 	// Register subsystem health checks
@@ -173,6 +189,9 @@ func New(configPath, version string) (*Server, error) {
 			return srv.Reload()
 		}),
 	}
+	if grpcCollector != nil {
+		restOpts = append(restOpts, rest.WithServerAgentCommander(grpcCollector.SendCommand))
+	}
 
 	// Configure TLS if server mode is https or auto
 	mode := strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
@@ -214,6 +233,15 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// 3. Start TSDB retention pruner
 	go s.retentionLoop(runCtx)
+
+	// 3b. Start gRPC agent collector if configured
+	if s.collector != nil {
+		go func() {
+			if err := s.collector.Start(runCtx); err != nil {
+				s.log.Warn("gRPC agent collector stopped", "err", err)
+			}
+		}()
+	}
 
 	// 4. Start REST API & Web UI server
 	errCh := make(chan error, 1)
@@ -311,6 +339,9 @@ func (s *Server) Shutdown() error {
 		if err := s.restSrv.Stop(shutdownCtx); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if s.collector != nil {
+		s.collector.Stop()
 	}
 	if s.scheduler != nil {
 		s.scheduler.Stop()

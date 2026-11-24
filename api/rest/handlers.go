@@ -36,6 +36,7 @@ type Handlers struct {
 	reloadFunc     ReloadFunc
 	onTargetChange func(*models.Target)
 	onTargetDelete func(string)
+	agentCommander func(agentID, cmd string, params map[string]string) error
 	logger         *slog.Logger
 	webHandler     http.Handler
 }
@@ -795,6 +796,83 @@ func (h *Handlers) DeleteSilenceHandler(w http.ResponseWriter, r *http.Request) 
 // SetConfig updates the active configuration reference (used on hot-reload).
 func (h *Handlers) SetConfig(cfg *config.Config) {
 	h.cfg = cfg
+}
+
+// ListAgentsHandler serves GET /api/v1/agents.
+func (h *Handlers) ListAgentsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	statusFilter := r.URL.Query().Get("status")
+	agents, err := h.meta.ListAgents(r.Context(), statusFilter)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if agents == nil {
+		agents = []*models.Agent{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"agents": agents})
+}
+
+// GetAgentHandler serves GET /api/v1/agents/{id}.
+func (h *Handlers) GetAgentHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	agent, err := h.meta.GetAgent(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			respondError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, agent)
+}
+
+// DeleteAgentHandler serves DELETE /api/v1/agents/{id}.
+func (h *Handlers) DeleteAgentHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := h.meta.DeleteAgent(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			respondError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "agent deleted"})
+}
+
+// SendAgentCommandHandler serves POST /api/v1/agents/{id}/command.
+func (h *Handlers) SendAgentCommandHandler(w http.ResponseWriter, r *http.Request) {
+	if h.agentCommander == nil {
+		respondError(w, http.StatusServiceUnavailable, "agent collector not enabled")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Command string            `json:"command"`
+		Params  map[string]string `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Command) == "" {
+		respondError(w, http.StatusBadRequest, "invalid command payload")
+		return
+	}
+	if err := h.agentCommander(id, req.Command, req.Params); err != nil {
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "sent", "agent_id": id, "command": req.Command})
 }
 
 // GetConfigHandler serves GET /api/v1/config with secrets redacted.
