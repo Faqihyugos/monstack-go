@@ -54,6 +54,17 @@ type MetadataStore interface {
 	ListAgents(ctx context.Context, status string) ([]*models.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id string, lastSeen time.Time, status models.AgentStatus) error
 	DeleteAgent(ctx context.Context, id string) error
+
+	// Users (RBAC)
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
+	GetUserByAPIKey(ctx context.Context, apiKey string) (*models.User, error)
+	ListUsers(ctx context.Context) ([]*models.User, error)
+	DeleteUser(ctx context.Context, id string) error
+
+	// Audit Log
+	RecordAudit(ctx context.Context, entry *models.AuditEntry) error
+	ListAuditLogs(ctx context.Context, resource string, limit int) ([]*models.AuditEntry, error)
 }
 
 // TSDB defines the Time-Series Database interface.

@@ -61,6 +61,17 @@ func NewRouter(h *Handlers, authCfg *config.AuthConfig, logger *slog.Logger) chi
 			})
 		})
 
+		// Audit Log & Export
+		r.Get("/audit", h.ListAuditLogsHandler)
+		r.Get("/audit/export", h.ExportAuditLogsHandler)
+
+		// RBAC Users Management
+		r.Route("/users", func(r chi.Router) {
+			r.Get("/", h.ListUsersHandler)
+			r.Post("/", h.CreateUserHandler)
+			r.Delete("/{id}", h.DeleteUserHandler)
+		})
+
 		// Alerting & Rules
 		r.Route("/alerts", func(r chi.Router) {
 			r.Get("/", h.ListAlertsHandler)

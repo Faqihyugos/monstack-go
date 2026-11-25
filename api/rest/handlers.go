@@ -20,6 +20,7 @@ import (
 	"github.com/Faqihyugos/monstack-go/pkg/models"
 	"github.com/Faqihyugos/monstack-go/web"
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ReloadFunc defines the callback for reloading configuration dynamically.
@@ -270,6 +271,7 @@ func (h *Handlers) CreateTargetHandler(w http.ResponseWriter, r *http.Request) {
 	if h.onTargetChange != nil {
 		h.onTargetChange(&target)
 	}
+	h.recordAudit(r, "create", "target", target.ID, target.Name)
 
 	respondJSON(w, http.StatusCreated, &target)
 }
@@ -403,6 +405,7 @@ func (h *Handlers) DeleteTargetHandler(w http.ResponseWriter, r *http.Request) {
 	if h.onTargetDelete != nil {
 		h.onTargetDelete(id)
 	}
+	h.recordAudit(r, "delete", "target", id, "deleted target")
 
 	respondJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
@@ -973,6 +976,160 @@ func (h *Handlers) ImportMetricsHandler(w http.ResponseWriter, r *http.Request) 
 		"status":   "accepted",
 		"imported": len(payload.Metrics),
 	})
+}
+
+func (h *Handlers) recordAudit(r *http.Request, action, resource, resourceID, details string) {
+	if h.meta == nil {
+		return
+	}
+	actor := "system"
+	if user, _, ok := r.BasicAuth(); ok && user != "" {
+		actor = user
+	}
+	_ = h.meta.RecordAudit(r.Context(), &models.AuditEntry{
+		Timestamp:  time.Now().UTC(),
+		Actor:      actor,
+		Action:     action,
+		Resource:   resource,
+		ResourceID: resourceID,
+		Details:    details,
+		IPAddress:  r.RemoteAddr,
+	})
+}
+
+// ListAuditLogsHandler serves GET /api/v1/audit?resource=&limit=.
+func (h *Handlers) ListAuditLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	resource := r.URL.Query().Get("resource")
+	limit := 100
+	if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if n, err := strconv.Atoi(lStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	entries, err := h.meta.ListAuditLogs(r.Context(), resource, limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if entries == nil {
+		entries = []*models.AuditEntry{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"audit": entries})
+}
+
+// ExportAuditLogsHandler serves GET /api/v1/audit/export as newline-delimited JSON (NDJSON).
+func (h *Handlers) ExportAuditLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	entries, err := h.meta.ListAuditLogs(r.Context(), r.URL.Query().Get("resource"), 1000)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="monstack-audit.ndjson"`)
+	w.WriteHeader(http.StatusOK)
+	enc := json.NewEncoder(w)
+	for _, e := range entries {
+		_ = enc.Encode(e)
+	}
+}
+
+// ListUsersHandler serves GET /api/v1/users.
+func (h *Handlers) ListUsersHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	users, err := h.meta.ListUsers(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if users == nil {
+		users = []*models.User{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+// CreateUserHandler serves POST /api/v1/users with bcrypt password hashing and optional API key generation.
+func (h *Handlers) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	var req struct {
+		Username       string          `json:"username"`
+		Password       string          `json:"password"`
+		Role           models.UserRole `json:"role"`
+		GenerateAPIKey bool            `json:"generate_api_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid user payload: %v", err))
+		return
+	}
+	if req.Role == "" {
+		req.Role = models.RoleViewer
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		respondError(w, http.StatusBadRequest, "password is required")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	user := &models.User{
+		ID:           generateUUID(),
+		Username:     strings.TrimSpace(req.Username),
+		PasswordHash: string(hash),
+		Role:         req.Role,
+		CreatedAt:    time.Now().UTC(),
+	}
+	if req.GenerateAPIKey {
+		user.APIKey = "ms_" + strings.ReplaceAll(generateUUID(), "-", "")
+	}
+	if err := user.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.meta.CreateUser(r.Context(), user); err != nil {
+		if errors.Is(err, storage.ErrAlreadyExists) {
+			respondError(w, http.StatusConflict, "user already exists")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordAudit(r, "create", "user", user.ID, user.Username)
+	respondJSON(w, http.StatusCreated, user)
+}
+
+// DeleteUserHandler serves DELETE /api/v1/users/{id}.
+func (h *Handlers) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	if h.meta == nil {
+		respondError(w, http.StatusInternalServerError, "metadata store not configured")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := h.meta.DeleteUser(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			respondError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordAudit(r, "delete", "user", id, "deleted user")
+	respondJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "user deleted"})
 }
 
 // GetConfigHandler serves GET /api/v1/config with secrets redacted.
