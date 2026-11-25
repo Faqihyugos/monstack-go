@@ -17,6 +17,7 @@ import (
 	"github.com/Faqihyugos/monstack-go/internal/alerting"
 	"github.com/Faqihyugos/monstack-go/internal/collector"
 	"github.com/Faqihyugos/monstack-go/internal/config"
+	"github.com/Faqihyugos/monstack-go/internal/discovery"
 	"github.com/Faqihyugos/monstack-go/internal/prober"
 	"github.com/Faqihyugos/monstack-go/internal/scheduler"
 	"github.com/Faqihyugos/monstack-go/internal/storage"
@@ -46,6 +47,7 @@ type Server struct {
 	silencer  *alerting.Silencer
 	evaluator *alerting.Evaluator
 	scheduler *scheduler.Scheduler
+	discovery *discovery.Manager
 	collector *collector.CollectorServer
 	restSrv   *rest.Server
 
@@ -111,6 +113,10 @@ func New(configPath, version string) (*Server, error) {
 	sched := scheduler.NewScheduler(metaStore, engine, 16, m, log)
 	sched.SetOnProbeComplete(evaluator.Trigger)
 
+	discMgr := discovery.NewManager(cfg.Discovery, metaStore, func(t *models.Target) {
+		sched.AddOrUpdateTarget(t)
+	}, log)
+
 	var grpcCollector *collector.CollectorServer
 	if strings.TrimSpace(cfg.GRPC.Listen) != "" {
 		grpcCollector = collector.NewCollectorServer(
@@ -138,6 +144,7 @@ func New(configPath, version string) (*Server, error) {
 		silencer:   silencer,
 		evaluator:  evaluator,
 		scheduler:  sched,
+		discovery:  discMgr,
 		collector:  grpcCollector,
 	}
 
@@ -230,6 +237,11 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// 2. Start alert evaluator
 	s.evaluator.Start(runCtx)
+
+	// 2b. Start service discovery manager
+	if s.discovery != nil {
+		s.discovery.Start(runCtx)
+	}
 
 	// 3. Start TSDB retention pruner
 	go s.retentionLoop(runCtx)
@@ -342,6 +354,9 @@ func (s *Server) Shutdown() error {
 	}
 	if s.collector != nil {
 		s.collector.Stop()
+	}
+	if s.discovery != nil {
+		s.discovery.Stop()
 	}
 	if s.scheduler != nil {
 		s.scheduler.Stop()

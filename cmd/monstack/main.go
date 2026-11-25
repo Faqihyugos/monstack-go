@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 		newServerCmd(),
 		newVersionCmd(),
 		newConfigCmd(),
+		newMigrateCmd(),
 	)
 
 	return rootCmd

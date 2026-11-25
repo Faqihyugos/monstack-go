@@ -10,15 +10,19 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/Faqihyugos/monstack-go/internal/config"
 )
 
 // Manager constructs tls.Config instances for the HTTP server based on TLSConfig.
 type Manager struct {
-	cfg config.TLSConfig
+	cfg      config.TLSConfig
+	autocert *autocert.Manager
 }
 
 // NewManager creates a new TLS Manager.
@@ -26,7 +30,7 @@ func NewManager(cfg config.TLSConfig) *Manager {
 	return &Manager{cfg: cfg}
 }
 
-// TLSConfig returns a configured *tls.Config for the selected mode (self-signed or manual).
+// TLSConfig returns a configured *tls.Config for the selected mode (self-signed, manual, or acme).
 func (m *Manager) TLSConfig() (*tls.Config, error) {
 	mode := strings.ToLower(strings.TrimSpace(m.cfg.Mode))
 	if mode == "" {
@@ -44,9 +48,28 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 			Certificates: []tls.Certificate{cert},
 		}, nil
 
-	case "self-signed", "acme":
-		// For MVP, self-signed generates an in-memory ECDSA P-256 certificate.
-		// Full ACME integration is planned for Phase 4.
+	case "acme":
+		if len(m.cfg.ACME.Domains) == 0 {
+			return nil, fmt.Errorf("acme TLS mode requires at least one domain")
+		}
+		cacheDir := m.cfg.ACME.CacheDir
+		if cacheDir == "" {
+			cacheDir = "/var/lib/monstack/certs"
+		}
+		if err := os.MkdirAll(cacheDir, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create ACME cache dir %s: %w", cacheDir, err)
+		}
+		m.autocert = &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Email:      m.cfg.ACME.Email,
+			HostPolicy: autocert.HostWhitelist(m.cfg.ACME.Domains...),
+			Cache:      autocert.DirCache(cacheDir),
+		}
+		tlsCfg := m.autocert.TLSConfig()
+		tlsCfg.MinVersion = tls.VersionTLS12
+		return tlsCfg, nil
+
+	case "self-signed":
 		cert, err := generateSelfSignedCert()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate self-signed TLS certificate: %w", err)
@@ -59,6 +82,11 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 	default:
 		return nil, fmt.Errorf("unsupported TLS mode: %q", m.cfg.Mode)
 	}
+}
+
+// AutocertManager returns the underlying autocert.Manager when running in ACME mode (or nil otherwise).
+func (m *Manager) AutocertManager() *autocert.Manager {
+	return m.autocert
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {

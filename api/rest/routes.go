@@ -33,6 +33,11 @@ func NewRouter(h *Handlers, authCfg *config.AuthConfig, logger *slog.Logger) chi
 		r.Put("/config/reload", h.ReloadConfigHandler)
 		r.Post("/config/reload", h.ReloadConfigHandler)
 
+		// Metrics Query & Import (Prometheus / OTLP JSON compatible)
+		r.Get("/query", h.QueryInstantHandler)
+		r.Get("/query_range", h.QueryRangeHandler)
+		r.Post("/import", h.ImportMetricsHandler)
+
 		// Targets Management
 		r.Route("/targets", func(r chi.Router) {
 			r.Get("/", h.ListTargetsHandler)

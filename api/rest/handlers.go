@@ -875,6 +875,106 @@ func (h *Handlers) SendAgentCommandHandler(w http.ResponseWriter, r *http.Reques
 	respondJSON(w, http.StatusOK, map[string]string{"status": "sent", "agent_id": id, "command": req.Command})
 }
 
+// QueryInstantHandler serves GET /api/v1/query?target=<id>&metric=<name>.
+func (h *Handlers) QueryInstantHandler(w http.ResponseWriter, r *http.Request) {
+	if h.tsdb == nil {
+		respondError(w, http.StatusServiceUnavailable, "tsdb not configured")
+		return
+	}
+	targetID := r.URL.Query().Get("target")
+	metric := r.URL.Query().Get("metric")
+	if targetID == "" || metric == "" {
+		respondError(w, http.StatusBadRequest, "query parameters 'target' and 'metric' are required")
+		return
+	}
+	pt, err := h.tsdb.GetLatestPoint(targetID, metric)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			respondError(w, http.StatusNotFound, "metric not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"status": "success", "data": pt})
+}
+
+// QueryRangeHandler serves GET /api/v1/query_range?target=<id>&metric=<name>&start=&end=&step=.
+func (h *Handlers) QueryRangeHandler(w http.ResponseWriter, r *http.Request) {
+	if h.tsdb == nil {
+		respondError(w, http.StatusServiceUnavailable, "tsdb not configured")
+		return
+	}
+	targetID := r.URL.Query().Get("target")
+	metric := r.URL.Query().Get("metric")
+	if targetID == "" {
+		respondError(w, http.StatusBadRequest, "query parameter 'target' is required")
+		return
+	}
+	var start, end time.Time
+	var step time.Duration
+	if s := r.URL.Query().Get("start"); s != "" {
+		if t, err := parseTime(s); err == nil {
+			start = t
+		}
+	}
+	if e := r.URL.Query().Get("end"); e != "" {
+		if t, err := parseTime(e); err == nil {
+			end = t
+		}
+	}
+	if st := r.URL.Query().Get("step"); st != "" {
+		if d, err := time.ParseDuration(st); err == nil {
+			step = d
+		}
+	}
+	pts, err := h.tsdb.QueryRange(targetID, metric, start, end, step)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if pts == nil {
+		pts = []models.MetricPoint{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"status": "success", "data": pts})
+}
+
+// ImportMetricsHandler serves POST /api/v1/import accepting JSON metric batches.
+func (h *Handlers) ImportMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.tsdb == nil {
+		respondError(w, http.StatusServiceUnavailable, "tsdb not configured")
+		return
+	}
+	var payload struct {
+		Metrics []models.MetricPoint `json:"metrics"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid metrics import payload: %v", err))
+		return
+	}
+	now := time.Now().UTC()
+	for i := range payload.Metrics {
+		if payload.Metrics[i].Timestamp.IsZero() {
+			payload.Metrics[i].Timestamp = now
+		}
+		if err := payload.Metrics[i].Validate(); err != nil {
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid metric at index %d: %v", i, err))
+			return
+		}
+	}
+	if err := h.tsdb.WritePoints(payload.Metrics); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.metrics != nil {
+		h.metrics.TSDBSamplesWritten.Add(float64(len(payload.Metrics)))
+	}
+	respondJSON(w, http.StatusAccepted, map[string]any{
+		"status":   "accepted",
+		"imported": len(payload.Metrics),
+	})
+}
+
 // GetConfigHandler serves GET /api/v1/config with secrets redacted.
 func (h *Handlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if h.cfg == nil {
